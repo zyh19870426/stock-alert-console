@@ -1,0 +1,46 @@
+# ============================================================
+# D:\mywork 仓库白名单
+# 本仓库只收纳「可跨机移植的项目资产」：
+#   stock-alert-console/  +  _tests/  +  需求文档  +  .workbuddy/memory/
+# 其余一切（个人简历、_private、云端脚本镜像、各类预览/输出）
+# 默认全部忽略，防止把本机敏感/无关文件推进版本库。
+# ============================================================
+
+# 默认忽略所有
+*
+!.gitignore
+
+# —— 纳入的项目资产 ——
+!stock-alert-console/
+!stock-alert-console/**
+!_tests/
+!_tests/**
+!股票监控系统-需求与方案说明.md
+!仓库迁移-操作清单.md
+
+# —— 项目记忆随 clone 走（8.1 / 8.4）——
+!/.workbuddy/
+!/.workbuddy/memory/
+!/.workbuddy/memory/**
+
+# —— _tests 下的生成物 / 大缓存不纳入 ——
+_tests/_cache/
+_tests/_cache/**
+*.log
+node_modules/
+
+# ============================================================
+# 二次过滤（2026-10-12 补）：白名单目录内的一次性产物 / 本机态
+# 原则：**可复现的中间产物与本机配置不入库**，只留源码、报告、数据存档。
+# ============================================================
+# _tests 下 `_` 前缀 = 临时探针与输出（跑完即弃，无移植价值）
+_tests/_*
+# 本机环境探针结果（别的机器必然不同）
+_tests/gpu_check.txt
+# 页面备份
+stock-alert-console/*.bak-*
+# WorkBuddy 本机应用配置（不含 locator 等本机态）
+stock-alert-console/.workbuddy/
+# 抓取中间缓存（可重新生成）
+stock-alert-console/.news-kline-cache.json
+stock-alert-console/.news-bt-codes.json

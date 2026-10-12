@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF 抱团周期选基台</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --border: #e2e5ea;
+    --text: #1c2330; --muted: #6b7480; --accent: #2563eb;
+    --up: #d92c2c; --down: #0e9a5f; --chip-init: #2563eb; --chip-mid: #7c3aed;
+    --warn: #d97706;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; padding: 16px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  h1 { font-size: 20px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin: 10px 0 14px; flex-wrap: wrap; }
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); font-size: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .panel h2 { font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #f0f4ff; }
+  tbody tr.sel { background: #e8efff; }
+  /* ★ 卡片式推荐池：桌面双列自适应、手机单列，替代宽表格避免错位 */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; background: #fff; }
+  .card:hover { background: #f0f4ff; }
+  .card.sel { background: #e8efff; border-color: #b9ccf5; }
+  .card .c1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card .nm { font-weight: 700; font-size: 15px; }
+  .card .cd { color: var(--muted); font-size: 12px; }
+  .card .ms { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+  .card .ms b { color: var(--text); font-size: 13.5px; }
+  /* 落选池宽表容器：窄屏横向滚动，不撑破页面 */
+  .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tbl-wrap table { min-width: 560px; }
+  .num-up { color: var(--up); font-weight: 600; }
+  .num-down { color: var(--down); font-weight: 600; }
+  .chip { display: inline-block; padding: 1px 9px; border-radius: 999px; color: #fff; font-size: 12px; }
+  .chip.init { background: var(--chip-init); }
+  .chip.mid { background: var(--chip-mid); }
+  .chip.flat { background: #94a3b8; }
+  .empty { color: var(--muted); padding: 14px 4px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
+  details[open] summary { margin-bottom: 8px; }
+  .rules { font-size: 12.5px; color: var(--muted); }
+  .rules li { margin: 3px 0 3px 18px; }
+  #detail .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  #detail .name { font-size: 17px; font-weight: 700; }
+  .metrics { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0 10px; font-size: 13px; }
+  .metrics b { font-size: 15px; }
+  .reasons { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  .reasons li { margin-left: 18px; }
+  #chart { width: 100%; height: 320px; display: block; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+  .disclaimer { color: var(--muted); font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ETF 抱团周期选基台</h1>
+    <span class="sub" id="dataTime">数据加载中…</span>
+  </header>
+
+  <div class="toolbar">
+    <button class="btn" id="btnRun">刷新分析</button>
+    <span class="status" id="status">初始化…</span>
+  </div>
+
+  <div class="panel">
+    <h2>推荐池 <span class="sub">上升趋势 × 新抱团周期初期/中期（已过退潮闸门）</span></h2>
+    <div id="reco"><div class="empty">加载中…</div></div>
+    <div class="disclaimer">判定口径为预注册规则（见下方说明），阈值固定不做人工调整。本页仅为数据筛选结果，不构成投资建议，仓位自行控制。</div>
+  </div>
+
+  <div class="panel" id="detail" style="display:none">
+    <div class="head">
+      <span class="name" id="dName">-</span>
+      <span class="sub" id="dCode"></span>
+      <span id="dChip"></span>
+    </div>
+    <div class="metrics" id="dMetrics"></div>
+    <ul class="reasons" id="dReasons"></ul>
+    <canvas id="chart"></canvas>
+    <div class="legend">
+      <span><i style="background:#2563eb"></i>收盘价</span>
+      <span><i style="background:#0d9488"></i>离场线 MA10</span>
+      <span><i style="background:#d97706"></i>MA20</span>
+      <span><i style="background:#7c3aed"></i>MA60</span>
+      <span><i style="background:#cbd5e1"></i>成交额(下方柱)</span>
+      <span><i style="background:#d92c2c"></i>抱团启动(金叉日)</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <details>
+      <summary>落选池（点击展开：每只落选标的与原因）</summary>
+      <div id="reject"></div>
+    </details>
+  </div>
+
+  <div class="panel">
+    <h2>判定口径（预注册 v1，阈值固定）</h2>
+    <ul class="rules">
+      <li><b>① 流动性</b>：MA20(成交额) ≥ 1 亿元（成交额=量(手)×100×收盘价）</li>
+      <li><b>② 上升趋势</b>：收盘 &gt; MA20 &gt; MA60，且 MA60 较 10 个交易日前上行</li>
+      <li><b>③ 退潮硬闸门</b>：近 20 日涨幅 &gt; 25%（暴涨透支）或 C&lt;MA20 且 MA5&lt;MA20（已回落）→ 一票否决</li>
+      <li><b>④ 抱团周期</b>：最近一次 MA5 上穿 MA60 距今 ≤15 日=初期，16~60 日=中期，&gt;60 日或窗口内无金叉=老周期（不推荐）</li>
+      <li><b>⑤ 资金跟进</b>：MA5(成交额)/MA60(成交额) ≥ 1.2，否则视为「趋势向上但资金未跟进」</li>
+      <li>排序：初期优先于中期，同阶段按量比（资金强度）降序</li>
+      <li><b>⑥ 持仓保护（离场线）</b>：买入后收盘 &lt; MA10（日线）即离场——3.5 年回测中把最差单笔锁在 -10% 以内（2026-07 急跌实测多数 -2%~-9% 离场）。周线/月线级离场已回测否决（急跌单笔最深 -29%/-44%）。离场线是持仓纪律，不影响入选判定。</li>
+    </ul>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+'use strict';
+/* ---------------- 候选池（错误/无效代码会被自动剔除） ---------------- */
+var POOL = [
+  // 宽基/科创
+  'sh510050','sh510300','sh510500','sz159915','sh512100','sh588000',
+  // 金融地产
+  'sh512880','sh512000','sh512800','sh512200',
+  // 消费医药
+  'sh512690','sh515170','sz159928','sh512010','sh512170','sz159992','sh512290',
+  // 科技制造
+  'sh512480','sh512760','sz159995','sh515000','sh512720','sh512330','sh515050','sh515880','sz159819','sh515980','sz159941',
+  // 周期资源
+  'sh512400','sh515220','sh515210',
+  // 军工
+  'sh512660','sh512710',
+  // 新能源电力
+  'sh515790','sh516160','sh515030','sz159755','sz159611',
+  // 传媒游戏/环保/旅游
+  'sz159949','sh516010','sh512980','sh512580','sz159766',
+  // 跨境/商品
+  'sh513050','sh513180','sh513100','sh513500','sz159920','sh518880'
+];
+
+var state = { rows: [], sel: null };
+
+/* ---------------- 数据加载（JSONP script 注入，无后端依赖） ---------------- */
+function loadScript(url, varName, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.charset = 'gbk';
+    var done = false;
+    var timer = setTimeout(function () { cleanup(); reject(new Error('timeout')); }, timeoutMs || 9000);
+    function cleanup() { clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); }
+    s.onload = function () { done = true; setTimeout(function () { cleanup(); resolve(window[varName]); }, 0); };
+    s.onerror = function () { cleanup(); reject(new Error('network')); };
+    s.src = url;
+    document.head.appendChild(s);
+  });
+}
+
+// 批量实时报价 → {code: {name, price}}
+function fetchQuotes(codes) {
+  var map = {};
+  var batches = [];
+  for (var i = 0; i < codes.length; i += 25) batches.push(codes.slice(i, i + 25));
+  return batches.reduce(function (p, batch) {
+    return p.then(function () {
+      var vn = 'q_' + Date.now();
+      var url = 'https://qt.gtimg.cn/q=' + batch.join(',') + '&_=' + Date.now();
+      return loadScript(url, vn, 9000).catch(function () { return null; }).then(function () {
+        batch.forEach(function (c) {
+          var v = window['v_' + c];
+          if (v && typeof v === 'string' && v.indexOf('~') > 0) {
+            var f = v.split('~');
+            if (f[1] && f[3]) map[c] = { name: f[1], price: parseFloat(f[3]) };
+          }
+          try { delete window['v_' + c]; } catch (e) {}
+        });
+      });
+    });
+  }, Promise.resolve()).then(function () { return map; });
+}
+
+// 单只日K → bars 数组
+function fetchKline(code) {
+  var vn = 'k_' + code;
+  var url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + code + ',day,,,320,qfq&_var=' + vn;
+  return loadScript(url, vn, 12000).then(function (obj) {
+    var d = obj && obj.data && obj.data[code];
+    var arr = d && (d.qfqday || d.day);
+    if (!arr || arr.length < 5) throw new Error('empty');
+    return arr.map(function (r) {
+      return { date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] };
+    });
+  }).finally(function () { try { delete window[vn]; } catch (e) {} });
+}
+
+// 并发池
+function runPool(tasks, limit, onProgress) {
+  var idx = 0, done = 0, results = new Array(tasks.length);
+  function worker(resolve) {
+    function next() {
+      if (idx >= tasks.length) { resolve(); return; }
+      var my = idx++;
+      tasks[my]().then(function (r) { results[my] = r; }, function (e) { results[my] = { error: e && e.message }; })
+        .then(function () { done++; if (onProgress) onProgress(done, tasks.length); next(); });
+    }
+    next();
+  }
+  return new Promise(function (resolve) {
+    for (var i = 0; i < Math.min(limit, tasks.length); i++) worker(resolve);
+  }).then(function () { return results; });
+}
+
+/* ---------------- 渲染 ---------------- */
+function fmtPct(x, cls) {
+  if (x == null) return '-';
+  var s = (x * 100).toFixed(1) + '%';
+  var c = cls !== false ? (x > 0 ? 'num-up' : (x < 0 ? 'num-down' : '')) : '';
+  return '<span class="' + c + '">' + s + '</span>';
+}
+function fmtYi(x) { return x == null ? '-' : (x / 1e8).toFixed(2) + '亿'; }
+
+var STAGE_ORDER = { init: 0, mid: 1 };
+
+function renderAll() {
+  var recoRows = state.rows.filter(function (r) { return r.res.verdict === 'init' || r.res.verdict === 'mid'; })
+    .sort(function (a, b) {
+      var d = STAGE_ORDER[a.res.verdict] - STAGE_ORDER[b.res.verdict];
+      return d !== 0 ? d : b.res.volRatio - a.res.volRatio;
+    });
+  var rejectRows = state.rows.filter(function (r) { return !(r.res.verdict === 'init' || r.res.verdict === 'mid'); });
+
+  // 推荐池：卡片式（桌面双列、手机单列）
+  var el = document.getElementById('reco');
+  if (!recoRows.length) {
+    el.innerHTML = '<div class="empty">当前候选池中没有处于抱团初/中期的标的（以当日截面为准）。</div>';
+  } else {
+    var h = '<div class="cards">';
+    recoRows.forEach(function (r) {
+      var safe = r.res.ma10 != null && r.res.lastClose >= r.res.ma10;
+      var g20c = r.res.g20 > 0 ? 'num-up' : (r.res.g20 < 0 ? 'num-down' : '');
+      h += '<div class="card' + (state.sel === r.code ? ' sel' : '') + '" data-code="' + r.code + '">'
+        + '<div class="c1"><span class="nm">' + r.name + '</span>'
+        + '<span class="chip ' + r.res.verdict + '">' + r.res.stageLabel + '</span>'
+        + '<span class="cd">' + r.code.slice(2) + ' · 第 ' + r.res.crowdDay + ' 天</span></div>'
+        + '<div class="ms">'
+        + '<span>现价 <b>' + r.res.lastClose.toFixed(3) + '</b></span>'
+        + '<span>近20日 <b class="' + g20c + '">' + (r.res.g20 != null ? (r.res.g20 * 100).toFixed(1) + '%' : '-') + '</b></span>'
+        + '<span>量比 <b>' + r.res.volRatio.toFixed(2) + '</b></span>'
+        + '<span>离场线 <b>' + (r.res.ma10 != null ? r.res.ma10.toFixed(3) : '-') + '</b> '
+        + (r.res.ma10 != null
+          ? (safe ? '<span class="chip" style="background:#0d9488">安全</span>'
+                  : '<span class="chip" style="background:var(--warn)">跌破</span>')
+          : '') + '</span>'
+        + '</div></div>';
+    });
+    el.innerHTML = h + '</div>';
+    el.querySelectorAll('.card[data-code]').forEach(function (c) {
+      c.onclick = function () { selectRow(c.getAttribute('data-code')); };
+    });
+  }
+
+  // 落选池（宽表容器内横向滚动）
+  var rj = document.getElementById('reject');
+  if (!rejectRows.length) { rj.innerHTML = '<div class="empty">无落选标的。</div>'; }
+  else {
+    var h2 = '<div class="tbl-wrap"><table><thead><tr><th>名称</th><th>代码</th><th>现价</th><th>近20日</th><th>落选原因</th></tr></thead><tbody>';
+    rejectRows.sort(function (a, b) { return (a.res.verdict || '').localeCompare(b.res.verdict || ''); });
+    rejectRows.forEach(function (r) {
+      h2 += '<tr style="cursor:default"><td>' + r.name + '</td><td>' + r.code.slice(2) + '</td>'
+        + '<td>' + (r.res.lastClose != null ? r.res.lastClose.toFixed(3) : '-') + '</td>'
+        + '<td>' + (r.res.g20 != null ? fmtPct(r.res.g20) : '-') + '</td>'
+        + '<td style="text-align:left">' + (r.res.reasons && r.res.reasons[0] || '-') + '</td></tr>';
+    });
+    rj.innerHTML = h2 + '</tbody></table></div>';
+  }
+
+  // 状态行
+  var nInit = recoRows.filter(function (r) { return r.res.verdict === 'init'; }).length;
+  document.getElementById('status').textContent =
+    '已分析 ' + state.rows.length + '/' + POOL.length + ' · 推荐：初期 ' + nInit + ' 只、中期 ' + (recoRows.length - nInit) + ' 只 · 落选 ' + rejectRows.length + ' 只';
+}
+
+function selectRow(code) {
+  state.sel = code;
+  renderAll();
+  var r = state.rows.filter(function (x) { return x.code === code; })[0];
+  if (!r) return;
+  var res = r.res;
+  document.getElementById('detail').style.display = '';
+  document.getElementById('detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('dName').textContent = r.name;
+  document.getElementById('dCode').textContent = code.slice(2) + ' · 截止 ' + r.bars[r.bars.length - 1].date;
+  var chip = document.getElementById('dChip');
+  if (res.verdict === 'init' || res.verdict === 'mid') {
+    chip.innerHTML = '<span class="chip ' + res.verdict + '">' + res.stageLabel + ' · 第 ' + res.crowdDay + ' 天</span>';
+  } else {
+    chip.innerHTML = '<span class="chip flat">未入选</span>';
+  }
+  var safeExit = res.ma10 != null && res.lastClose >= res.ma10;
+  document.getElementById('dMetrics').innerHTML =
+    '<span>现价 <b>' + res.lastClose.toFixed(3) + '</b></span>'
+    + '<span>离场线 MA10 <b>' + (res.ma10 != null ? res.ma10.toFixed(3) : '-') + '</b> '
+    + (res.ma10 != null ? '<span class="chip" style="background:' + (safeExit ? '#0d9488' : 'var(--warn)') + '">' + (safeExit ? '在上方·持有' : '已跌破·离场') + '</span>' : '') + '</span>'
+    + '<span>近20日 <b class="' + (res.g20 > 0 ? 'num-up' : (res.g20 < 0 ? 'num-down' : '')) + '">' + (res.g20 != null ? (res.g20 * 100).toFixed(1) + '%' : '-') + '</b></span>'
+    + '<span>量比(5日均额/60日均额) <b>' + (res.volRatio != null ? res.volRatio.toFixed(2) : '-') + '</b></span>'
+    + '<span>MA20成交额 <b>' + fmtYi(res.amtMa20) + '</b></span>';
+  document.getElementById('dReasons').innerHTML = (res.reasons || []).map(function (x) { return '<li>' + x + '</li>'; }).join('');
+  drawChart(r, res);
+}
+
+/* ---------------- 图表 ---------------- */
+function drawChart(r, res) {
+  var canvas = document.getElementById('chart');
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  var n = r.bars.length, from = Math.max(0, n - 120);
+  var ind = FundEngine.buildIndicators(r.bars);
+  var closes = [], ma10s = [], ma20s = [], ma60s = [], amts = [];
+  for (var i = from; i < n; i++) {
+    closes.push(ind.closes[i]); ma10s.push(ind.ma10[i]); ma20s.push(ind.ma20[i]); ma60s.push(ind.ma60[i]); amts.push(ind.amts[i]);
+  }
+  var m = closes.length;
+  var lo = Math.min.apply(null, closes.concat(ma20s, ma60s).filter(function (x) { return x != null; }));
+  var hi = Math.max.apply(null, closes.concat(ma20s, ma60s).filter(function (x) { return x != null; }));
+  var pad = (hi - lo) * 0.08 || 0.01; lo -= pad; hi += pad;
+  var priceH = H * 0.72, volH = H * 0.22, gap = 8;
+  var maxAmt = Math.max.apply(null, amts);
+  function X(i) { return (i / (m - 1)) * (W - 8) + 4; }
+  function Y(v) { return priceH - ((v - lo) / (hi - lo)) * (priceH - 16) - 8; }
+
+  // 网格
+  ctx.strokeStyle = '#eef1f5'; ctx.lineWidth = 1;
+  for (var g = 0; g <= 4; g++) {
+    var gy = 8 + g * (priceH - 16) / 4;
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    ctx.fillStyle = '#8a93a0'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText((hi - (hi - lo) * g / 4).toFixed(3), 4, gy - 3);
+  }
+  // 成交额柱
+  ctx.fillStyle = '#dbe1e8';
+  for (var vi = 0; vi < m; vi++) {
+    var vh = maxAmt ? (amts[vi] / maxAmt) * volH : 0;
+    ctx.fillRect(X(vi) - 1, H - vh, 2, vh);
+  }
+  // 抱团金叉日标记
+  if (res.crossIdx >= from) {
+    var cx = X(res.crossIdx - from);
+    ctx.strokeStyle = '#d92c2c'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(cx, 8); ctx.lineTo(cx, H); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#d92c2c'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('抱团启动', cx, 20);
+  }
+  function line(arr, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width || 1.6; ctx.beginPath();
+    var started = false;
+    for (var i = 0; i < m; i++) {
+      if (arr[i] == null) continue;
+      if (!started) { ctx.moveTo(X(i), Y(arr[i])); started = true; }
+      else ctx.lineTo(X(i), Y(arr[i]));
+    }
+    ctx.stroke();
+  }
+  line(ma60s, '#7c3aed');
+  line(ma20s, '#d97706');
+  line(ma10s, '#0d9488', 1.4);
+  line(closes, '#2563eb', 2);
+  // 落款日期
+  ctx.fillStyle = '#8a93a0'; ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left'; ctx.fillText(r.bars[from].date, 4, H - 2);
+  ctx.textAlign = 'right'; ctx.fillText(r.bars[n - 1].date, W - 4, H - 2);
+}
+
+/* ---------------- 主流程 ---------------- */
+function analyze() {
+  var btn = document.getElementById('btnRun');
+  btn.disabled = true;
+  document.getElementById('status').textContent = '拉取实时报价…';
+  document.getElementById('reco').innerHTML = '<div class="empty">加载中…</div>';
+
+  fetchQuotes(POOL).then(function (quotes) {
+    var codes = POOL.filter(function (c) { return quotes[c] && quotes[c].name && quotes[c].price > 0.001; });
+    document.getElementById('status').textContent = '拉取日K（0/' + codes.length + '）…';
+    var tasks = codes.map(function (code) {
+      return function () { return fetchKline(code); };
+    });
+    return runPool(tasks, 6, function (done, total) {
+      document.getElementById('status').textContent = '拉取日K（' + done + '/' + total + '）…';
+    }).then(function (results) {
+      state.rows = [];
+      var lastDate = '';
+      codes.forEach(function (code, i) {
+        var res = results[i];
+        var bars = res && !res.error ? res : null;
+        if (!bars || !bars.length) {
+          state.rows.push({ code: code, name: (quotes[code] && quotes[code].name) || code, bars: [], res: { verdict: 'nodata', lastClose: null, g20: null, volRatio: null, reasons: ['数据不可用'] } });
+          return;
+        }
+        var c = FundEngine.classify(bars);
+        c.lastClose = bars[bars.length - 1].close;
+        var _ind = FundEngine.buildIndicators(bars);
+        c.ma10 = _ind.ma10[bars.length - 1];
+        c.amtMa20 = _ind.amts.slice(-20).reduce(function (a, b) { return a + b; }, 0) / Math.min(20, bars.length);
+        if (bars[bars.length - 1].date > lastDate) lastDate = bars[bars.length - 1].date;
+        state.rows.push({ code: code, name: quotes[code].name, bars: bars, res: c });
+      });
+      document.getElementById('dataTime').textContent = '数据时点：' + lastDate + '（日K收盘）';
+      renderAll();
+      if (state.sel) selectRow(state.sel);
+      btn.disabled = false;
+    });
+  }).catch(function (e) {
+    document.getElementById('status').textContent = '加载失败：' + (e && e.message);
+    btn.disabled = false;
+  });
+}
+
+document.getElementById('btnRun').onclick = analyze;
+/* 转屏/改窗口时重绘当前图表，避免 canvas 拉伸错位 */
+var _rzT = null;
+window.addEventListener('resize', function () {
+  clearTimeout(_rzT);
+  _rzT = setTimeout(function () { if (state.sel) selectRow(state.sel); }, 200);
+});
+analyze();
+</script>
+</body>
+</html>

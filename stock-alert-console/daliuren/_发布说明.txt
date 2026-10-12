@@ -1,0 +1,4 @@
+本目录由 D:\mywork\daliuren\sync-publish.js 自动生成，是六壬起课页的线上副本。
+请不要在此处修改代码 —— 改动会被下次同步覆盖。
+真源：D:\mywork\daliuren\    线上：https://stock-alert-console.app.workbuddy.host/daliuren/
+更新流程：① 改真源 → ② node D:\mywork\daliuren\sync-publish.js → ③ node D:\mywork\_tests\publish-guard.js → ④ 发布 stock-alert-console 目录

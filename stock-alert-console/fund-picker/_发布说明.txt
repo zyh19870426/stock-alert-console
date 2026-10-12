@@ -1,0 +1,4 @@
+本目录由 D:\mywork\fund-picker\sync-publish.js 自动生成，是 ETF 抱团选基台的线上副本。
+请不要在此处修改代码 —— 改动会被下次同步覆盖。
+真源：D:\mywork\fund-picker\    线上：https://stock-alert-console.app.workbuddy.host/fund-picker/
+更新流程：① 改真源 → ② node D:\mywork\fund-picker\sync-publish.js → ③ node D:\mywork\_tests\publish-guard.js → ④ 发布 stock-alert-console 目录

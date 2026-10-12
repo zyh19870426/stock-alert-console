@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大六壬 · 正时起课</title>
+<style>
+  :root{
+    --bg:#f7f4ec; --card:#fffdf7; --ink:#2b2620; --sub:#7a7264;
+    --line:#e2dccd; --accent:#8c2f1b; --accent2:#1f5c4d; --gold:#9a7b2d;
+    --red:#b03024; --blue:#2b5f9e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Microsoft YaHei","PingFang SC",sans-serif;line-height:1.6;padding:24px 12px 60px}
+  .wrap{max-width:1060px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+  h1{font-size:26px;letter-spacing:6px;color:var(--accent);font-family:KaiTi,STKaiti,serif}
+  header .clock{font-size:14px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(60,50,30,.05)}
+  .card h2{font-size:16px;color:var(--accent2);margin-bottom:12px;letter-spacing:2px;border-left:4px solid var(--accent2);padding-left:8px}
+  .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+  .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px}
+  select,input[type=date],input[type=time],input[type=text]{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:14px;color:var(--ink)}
+  input:focus,select:focus{outline:2px solid #c9a86a}
+  .btnrow{display:flex;gap:12px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  button{cursor:pointer;border:none;border-radius:8px;padding:10px 34px;font-size:16px;letter-spacing:4px}
+  .btn-main{background:var(--accent);color:#fff}
+  .btn-main:hover{background:#a13a24}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--sub);padding:10px 16px;font-size:13px;letter-spacing:1px}
+  /* 盘面 */
+  .meta{display:flex;flex-wrap:wrap;gap:10px 22px;font-size:14px;margin-bottom:14px}
+  .meta b{color:var(--accent)}
+  .meta .tag{display:inline-block;background:#f0e9d8;border-radius:4px;padding:1px 8px;font-size:12px;color:var(--gold);margin-left:4px}
+  .panWrap{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  .panGrid{display:grid;grid-template-columns:repeat(4,64px);grid-template-rows:repeat(4,64px);gap:4px}
+  .cell{border:1px solid var(--line);border-radius:6px;background:#fbf8f0;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .cell.tian{font-size:22px;font-family:KaiTi,STKaiti,serif;color:var(--ink)}
+  .cell .jiang{font-size:10px;color:var(--accent2)}
+  .cell .gong{position:absolute;bottom:2px;right:4px;font-size:10px;color:#b9af9c}
+  .cell.shi{border-color:#c9a86a;background:#faf3e2}
+  .cell.gui{border-color:var(--accent);background:#fdf1ec}
+  .cols{flex:1;min-width:300px;display:flex;gap:22px;flex-wrap:wrap}
+  table{border-collapse:collapse;font-size:14px}
+  th,td{border:1px solid var(--line);padding:5px 10px;text-align:center}
+  th{background:#f0e9d8;color:var(--accent2);font-weight:600;font-size:13px}
+  .ke{display:flex;gap:10px}
+  .keCol{border:1px solid var(--line);border-radius:8px;background:#fbf8f0;min-width:76px;padding:6px 8px;text-align:center}
+  .keCol .no{font-size:11px;color:var(--sub)}
+  .keCol .zhi{font-size:20px;font-family:KaiTi,STKaiti,serif}
+  .keCol .jiang{font-size:11px;color:var(--accent2)}
+  .keCol .kong{color:#b9af9c;text-decoration:line-through}
+  .chuanCol{border:1px solid #c9a86a;border-radius:8px;background:#faf3e2;min-width:96px;padding:8px;text-align:center}
+  .chuanCol .name{font-size:12px;color:var(--gold)}
+  .chuanCol .gz{font-size:20px;font-family:KaiTi,STKaiti,serif;color:var(--accent)}
+  .chuanCol .info{font-size:11px;color:var(--sub)}
+  .rule{background:#f4f1e6;border-radius:8px;padding:10px 14px;font-size:13px;color:#5a5344;margin-top:12px}
+  .geju{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .geju span{background:#eef3ef;border:1px solid #ccdcd2;color:var(--accent2);border-radius:6px;padding:3px 10px;font-size:13px}
+  /* 解析 */
+  .jd h3{font-size:15px;color:var(--accent);margin:14px 0 6px;letter-spacing:1px}
+  .jd h3::before{content:"◆";font-size:10px;margin-right:6px;color:var(--gold)}
+  .jd p{font-size:14px;margin:4px 0}
+  .jd ul{margin:4px 0 4px 20px;font-size:14px}
+  .jd li{margin:3px 0}
+  .yi li::marker{color:var(--accent2)}
+  .ji li::marker{color:var(--red)}
+  .zongduan{background:#f8f2e4;border:1px solid #e5d5ae;border-radius:8px;padding:12px 16px;font-size:15px}
+  table.key{width:100%;font-size:13px}
+  table.key td:first-child{white-space:nowrap;color:var(--accent)}
+  .kong{color:#b9af9c}
+  .xiong{color:var(--red)} .jix{color:var(--accent2)}
+  .disclaim{font-size:12px;color:#a89e8c;text-align:center;margin-top:8px}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>大六壬 · 正时起课</h1>
+    <span class="clock" id="clock">--</span>
+  </header>
+  <p class="sub">月将加时成天盘 · 四课 · 发三传 · 布十二天将 —— 依《大六壬指南》《钦定古今图书集成》通行规则推演</p>
+
+  <div class="card">
+    <h2>起课参数</h2>
+    <div class="form">
+      <div class="field"><label>起课日期（默认当日，可修改）</label><input type="date" id="inDate" min="1949-01-01" max="2099-12-31"></div>
+      <div class="field"><label>起课时间（默认当前，可修改）</label><input type="time" id="inTime" step="60"></div>
+      <div class="field"><label>课主性别（默认男）</label>
+        <select id="inSex"><option value="male" selected>男</option><option value="female">女</option></select></div>
+      <div class="field"><label>课主生年（默认 1987 丁卯，1949-2099）</label><select id="inYear"></select></div>
+      <div class="field"><label>月将（默认自动：按太阳过宫，逢中气换将）</label><select id="inJiang"></select></div>
+      <div class="field"><label>所问何事（可不填）</label><input type="text" id="inTopic" placeholder="如：求职、合作、出行……"></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn-main" id="btnQi">起 课</button>
+      <button class="btn-ghost" id="btnNow">回到当前时间</button>
+    </div>
+  </div>
+
+  <div id="result" class="hide">
+    <div class="card">
+      <h2>课盘</h2>
+      <div class="meta" id="meta"></div>
+      <div class="panWrap">
+        <div class="panGrid" id="panGrid"></div>
+        <div class="cols">
+          <div>
+            <table>
+              <tr><th>课序</th><th>上神</th><th>下神</th><th>天将</th></tr>
+              <tbody id="keTable"></tbody>
+            </table>
+          </div>
+          <div>
+            <table>
+              <tr><th>三传</th><th>遁干</th><th>六亲</th><th>天将</th></tr>
+              <tbody id="chuanTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="rule" id="rule"></div>
+    </div>
+
+    <div class="card">
+      <h2>格局</h2>
+      <div class="geju" id="geju"></div>
+    </div>
+
+    <div class="card jd">
+      <h2>盘面解析</h2>
+      <div id="jiexi"></div>
+      <p class="disclaim">本页推演依传统大六壬规则排盘，解析为象义推演，仅供参考，不构成任何现实决策依据。</p>
+    </div>
+  </div>
+</div>
+
+<script src="core-data.js"></script>
+<script src="core-pan.js"></script>
+<script src="core-zhuan.js"></script>
+<script src="core-read.js"></script>
+<script src="core-jiexi.js"></script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var DLR = window.DLR, ZHI = DLR.ZHI, GAN = DLR.GAN;
+
+  // 生年 1949-2099
+  (function(){
+    var sel = $("inYear"), html = "";
+    for (var y = 1949; y <= 2099; y++) {
+      var g = DLR.yearGZ(y);
+      html += '<option value="' + y + '"' + (y === 1987 ? " selected" : "") + ">" + y + "（" + GAN[g.gan] + ZHI[g.zhi] + "）</option>";
+    }
+    sel.innerHTML = html;
+  })();
+  // 月将：自动 + 手动
+  (function(){
+    var sel = $("inJiang"), html = '<option value="auto" selected>自动（按太阳过宫）</option>';
+    for (var i = 0; i < 12; i++) html += '<option value="' + i + '">' + DLR.JIANG_MING[i] + "（" + ZHI[i] + "将）</option>";
+    sel.innerHTML = html;
+  })();
+
+  function pad(n){ return n < 10 ? "0" + n : "" + n; }
+  function nowStr(){
+    var d = new Date();
+    return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate()) + " " +
+           pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) +
+           "  星期" + "日一二三四五六"[d.getDay()];
+  }
+  function fillNow(){
+    var d = new Date();
+    $("inDate").value = d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+    $("inTime").value = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  fillNow();
+  setInterval(function(){ $("clock").textContent = "当前时间　" + nowStr(); }, 1000);
+  $("clock").textContent = "当前时间　" + nowStr();
+  $("btnNow").onclick = fillNow;
+
+  $("btnQi").onclick = function(){
+    var dv = $("inDate").value, tv = $("inTime").value || "12:00";
+    if (!dv) { alert("请选择起课日期"); return; }
+    var dp = dv.split("-"), tp = tv.split(":");
+    var date = new Date(+dp[0], +dp[1]-1, +dp[2], +tp[0], +tp[1]);
+    var jiangSel = $("inJiang").value;
+    var opts = {
+      date: date,
+      male: $("inSex").value === "male",
+      birthYear: +$("inYear").value,
+      jiang: jiangSel === "auto" ? null : +jiangSel,
+      topic: $("inTopic").value.trim()
+    };
+    try { render(DLR.qiKe(opts)); }
+    catch (e) { alert("起课失败：" + e.message); }
+  };
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+  function render(d){
+    var sc = d.sanChuanRes, jx = DLR.jieXi(d);
+    var Z = ZHI, G = GAN;
+
+    // ---- meta ----
+    var hourName = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"][d.shiZhi];
+    var html = "";
+    html += "<div>占日：<b>" + G[d.dayGZ.gan] + Z[d.dayGZ.zhi] + "日</b></div>";
+    html += "<div>月将：<b>" + DLR.JIANG_MING[d.yueJiang] + "（" + Z[d.yueJiang] + "）</b></div>";
+    html += "<div>占时：<b>" + hourName + "时</b><span class='tag'>" + (d.tianJiang.dayTime ? "昼占" : "夜占") + "</span></div>";
+    html += "<div>贵人：" + Z[d.tianJiang.guiZhi] + "（" + (d.tianJiang.shun ? "顺布" : "逆布") + "，临" + Z[d.tianJiang.guiPos] + "宫）</div>";
+    html += "<div>空亡：<b>" + Z[d.xunKong[0]] + Z[d.xunKong[1]] + "</b></div>";
+    if (d.xingNian) html += "<div>课主行年：" + G[d.xingNian.gan] + Z[d.xingNian.zhi] + "（虚岁" + d.xingNian.sui + "）</div>";
+    if (d.topic) html += "<div>所问：<b>" + esc(d.topic) + "</b></div>";
+    html += "<div>课体：<b>" + sc.keti + "</b></div>";
+    $("meta").innerHTML = html;
+
+    // ---- 天地盘方阵（巳午未申 / 辰·酉 / 卯·戌 / 寅丑子亥）----
+    var layout = [5,6,7,8, 4,-1,9, 3,-1,10, 2,1,0,11];
+    var gh = "";
+    for (var i = 0; i < layout.length; i++) {
+      var gong = layout[i];
+      if (gong < 0) { gh += "<div style='border:none'></div>"; continue; }
+      var tian = d.tianPan[gong];
+      var cls = "cell" + (gong === d.shiZhi ? " shi" : "") + (tian === d.tianJiang.guiZhi ? " gui" : "");
+      gh += "<div class='" + cls + "' title='地盘" + Z[gong] + "宫之上，天盘乘" + Z[tian] + "'>" +
+            "<div class='jiang'>" + DLR.jiangOf(d.tianJiang.jiangOnZhi, tian) + "</div>" +
+            "<div class='tian'>" + Z[tian] + "</div>" +
+            "<div class='gong'>" + Z[gong] + "</div></div>";
+    }
+    $("panGrid").innerHTML = gh;
+
+    // ---- 四课 ----
+    var kh = "", names = ["一","二","三","四"];
+    for (var k = 0; k < 4; k++) {
+      var ke = d.siKe[k];
+      var bot = ke.bottomIsGan ? G[ke.ganIdx] : Z[ke.bottom];
+      kh += "<tr><td>第" + names[k] + "课</td>" +
+            "<td><span class='" + (ke.kong ? "kong" : "") + "' style='font-size:17px;font-family:KaiTi'>" + Z[ke.top] + "</span></td>" +
+            "<td style='font-family:KaiTi'>" + bot + "</td><td style='font-size:12px'>" + ke.jiang + "</td></tr>";
+    }
+    $("keTable").innerHTML = kh;
+
+    // ---- 三传 ----
+    var ch = "", cn = ["初传","中传","末传"];
+    for (var c = 0; c < 3; c++) {
+      var x = d.chuan[c];
+      var dg = x.dun != null ? G[x.dun] : "—";
+      ch += "<tr><td><b>" + cn[c] + "</b></td>" +
+            "<td><span class='" + (x.kong ? "kong" : "") + "' style='font-size:17px;font-family:KaiTi'>" + dg + Z[x.zhi] + "</span>" + (x.kong ? "空" : "") + "</td>" +
+            "<td>" + x.qin + "</td><td>" + x.jiang + "</td></tr>";
+    }
+    $("chuanTable").innerHTML = ch;
+
+    // ---- 取用规则 ----
+    $("rule").innerHTML = "<b>取传规则</b>｜" + esc(sc.rule) +
+      "。中传取初传之上神，末传取中传之上神。" +
+      "（涉害深浅口径：候选用神自所临地盘宫涉归本家，途中受克之数——地支本气一重、宫内寄干各一重，不计临宫与本家；昼夜贵以卯时至申时为昼、酉时至寅时为夜）";
+
+    // ---- 格局 ----
+    var gj = d.geJu.length ? "" : "<span style='color:#a89e8c'>本课未见显著格局</span>";
+    for (var g2 = 0; g2 < d.geJu.length; g2++)
+      gj += "<span title='" + esc(d.geJu[g2].text) + "'><b>" + esc(d.geJu[g2].name) + "</b> · " + esc(d.geJu[g2].text) + "</span>";
+    $("geju").innerHTML = gj;
+
+    // ---- 解析 ----
+    var j = "";
+    j += "<div class='zongduan'><b>【总断】</b>　" + esc(jx.zongDuan) + "</div>";
+    j += "<h3>三传看事</h3><ul>";
+    for (var m = 0; m < jx.chuan.length; m++) j += "<li>" + esc(jx.chuan[m]) + "</li>";
+    j += "</ul>";
+    j += "<p>" + esc(jx.ganShang) + "</p><p>" + esc(jx.zhiShang) + "</p>";
+    j += "<p><b>气机大势：</b>" + esc(jx.qiShi) + "</p>";
+    j += "<h3>宜行方向</h3><ul class='yi'>";
+    for (m = 0; m < jx.yi.length; m++) j += "<li>" + esc(jx.yi[m]) + "</li>";
+    j += "</ul><h3>切莫为之</h3><ul class='ji'>";
+    for (m = 0; m < jx.ji.length; m++) j += "<li>" + esc(jx.ji[m]) + "</li>";
+    j += "</ul>";
+    j += "<h3>时间发展</h3><p>" + esc(jx.shiJian) + "</p>";
+    if (jx.keyDates.length) {
+      j += "<h3>关键时间（未来六十日内）</h3><table class='key'><tr><th>公历日期</th><th>干支</th><th>应期之象</th></tr>";
+      for (m = 0; m < jx.keyDates.length; m++) {
+        var kd = jx.keyDates[m];
+        j += "<tr><td>" + kd.date.getFullYear() + "-" + pad(kd.date.getMonth()+1) + "-" + pad(kd.date.getDate()) + "</td>" +
+             "<td>" + GAN[kd.gz.gan] + ZHI[kd.gz.zhi] + "日</td><td style='text-align:left'>" + esc(kd.text) + "</td></tr>";
+      }
+      j += "</table>";
+    }
+    $("jiexi").innerHTML = j;
+    $("result").classList.remove("hide");
+    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+})();
+</script>
+</body>
+</html>
