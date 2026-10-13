@@ -19,6 +19,7 @@
  * 用法（默认 dry-run）：
  *   GH_TOKEN=xxx node _tests/push-repo.js --to=zyh19870426/stock-alert-console
  *   GH_TOKEN=xxx node _tests/push-repo.js --to=zyh19870426/stock-alert-console --apply
+ *   GH_TOKEN=xxx node _tests/push-repo.js --to=zyh19870426/stock-alert --patch --apply
  *
  * 参数：
  *   --to        必填，owner/repo
@@ -26,6 +27,10 @@
  *   --dir       本地仓目录，默认当前目录
  *   --apply     真正写入（不带则只打印计划）
  *   --allow-empty 无任何变化时也建一个提交（默认跳过）
+ *   --patch     ★ 补丁模式：tree 带 base_tree，**只替换清单内变化的文件，远端其它文件原样保留**。
+ *               用于「本地只持有一部分文件」的仓（如引擎仓 stock-alert：本地只有代码，
+ *               运行期数据存档 state.json/rotation.json/… 只存在于远端）。
+ *               不加此开关 = 完整树模式（远端多余的会被移除），仅适用于本地=全量镜像的仓。
  */
 
 const fs = require('fs')
@@ -44,6 +49,7 @@ const BRANCH = args.branch || 'main'
 const DIR = path.resolve(args.dir || process.cwd())
 const APPLY = !!args.apply
 const ALLOW_EMPTY = !!args['allow-empty']
+const PATCH = !!args.patch
 // ★ 本沙盒 spawnSync/execFileSync 不可用（EBUSY），所以文件清单由外部 shell 先落成文件：
 //   git -c core.quotepath=false ls-files -s > <list>
 const LIST = args.list ? path.resolve(args.list) : path.join(DIR, '_push_list.txt')
@@ -99,6 +105,13 @@ async function remoteTree() {
   return r.json.tree.filter(x => x.type === 'blob')
 }
 
+/* 补丁模式：取当前分支的 tree sha 作为 base_tree，未列出的远端文件自动继承 */
+async function baseTreeSha() {
+  const r = await api('GET', API + '/git/trees/' + BRANCH)
+  if (!r.ok) throw new Error('取 base_tree 失败 HTTP ' + r.status)
+  return r.json.sha
+}
+
 /* ★ 空仓陷阱：Git Data API 在完全没有提交的仓库上建 blob 会 409 "Git Repository is empty"
    ⇒ 先用 Contents API 落一个占位提交把仓库初始化出来。
    正式提交的 tree 不带 base_tree（是只含清单内路径的完整树），占位文件不会残留。 */
@@ -150,7 +163,7 @@ async function ensureInit() {
 
   console.log('  新增（远端没有）  ：' + missing.length)
   console.log('  修改（内容不同）  ：' + changedItems.length)
-  console.log('  未被跟踪的远端文件：' + extra.length + (extra.length ? '  → 本次会从树里移除' : ''))
+  console.log('  未被跟踪的远端文件：' + extra.length + (extra.length ? (PATCH ? '  → 补丁模式：原样保留' : '  → 本次会从树里移除') : ''))
   console.log('')
   if (missing.length) {
     console.log('  —— 新增 --')
@@ -172,7 +185,8 @@ async function ensureInit() {
 
   if (!APPLY) { console.log('\n（dry-run 结束。确认无误后加 --apply 执行）'); return }
 
-  if (!changedItems.length && !extra.length && !ALLOW_EMPTY) {
+  const nothingToDo = PATCH ? !changedItems.length : (!changedItems.length && !extra.length)
+  if (nothingToDo && !ALLOW_EMPTY) {
     console.log('\n远端内容已与本地一致，无需提交。')
     return
   }
@@ -180,6 +194,7 @@ async function ensureInit() {
   const init = await ensureInit()
   if (init) console.log('  仓库状态：' + init + '\n')
 
+  const changedPaths = new Set(changedItems.map(x => x.path))
   const tree = []
   let i = 0
   for (const it of items) {
@@ -192,7 +207,9 @@ async function ensureInit() {
   }
   if (i) process.stdout.write('\r' + ' '.repeat(84) + '\r')
 
-  const t = await api('POST', API + '/git/trees', { tree })
+  const t = await api('POST', API + '/git/trees', PATCH
+    ? { base_tree: await baseTreeSha(), tree: tree.filter(x => changedPaths.has(x.path)) }
+    : { tree })
   if (!t.ok) throw new Error('建 tree 失败 HTTP ' + t.status + ' ' + JSON.stringify(t.json).slice(0, 200))
 
   const ref = await api('GET', API + '/git/ref/heads/' + BRANCH)
