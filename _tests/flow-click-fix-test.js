@@ -49,6 +49,9 @@ const openByBkSrc = seg(src, /function flowOpenByBk\(bk\)\{/, /\nfunction flowBi
 ok(openByBkSrc.length > 100, '取到 flowOpenByBk 源码段', 'len=' + openByBkSrc.length);
 ok(/logOp\s*\(/.test(openByBkSrc), '未命中板块时会记日志（不是静默 return）');
 ok(/return\s+false/.test(openByBkSrc), 'flowOpenByBk 有明确成功/失败返回值语义');
+ok(/\$\('sheetFlow'\)\.classList\.add\('on'\)/.test(openByBkSrc),
+  '★ 未命中时也真的弹窗给反馈（只写日志＝用户眼里的「点了没反应」）');
+ok(/FLOW\.lastOpenAt/.test(openByBkSrc), '同一板块 0.8s 去抖（兜底与 click 不会双开）');
 
 /* 3) 「更多」：抽成 flowMore 且带 showAll 键兜底回写 */
 const moreSrc = seg(src, /function flowMore\(more\)\{/, /\nfunction flowOpenByBk/, 0);
@@ -88,23 +91,47 @@ ok(/FLOW\._lastIn === hIn && FLOW\._lastOut === hOut/.test(renderCode),
 ok(/querySelector\('\.flow-rk'\)/.test(renderCode),
   '跳过前提是列表确实在屏上（空态/加载占位必须照常画）');
 ok(/FLOW\._lastIn = hIn/.test(renderCode), '跳过判断后有回写上次产物（否则永不更新）');
-/* 6b) 触摸保护：flowMarkTap/flowTapBusy + 后台补渲让路 */
-const bindAllSrc = seg(src, /function flowMarkTap\(\)\{/, /\nvar flowOpenSheet/, 0);
+/* 6b) 触摸保护：flowMarkTap/flowTapBusy + 后台补渲让路
+ * ★ 2026-10-13 二次加固（用户手机实测「弹窗完全不出来」）：只「不重画」还不够 ——
+ *   真机上节点仍可能在极短窗口内被换掉、部分内核被换掉后干脆不派发 click。
+ *   故加两道兜底：按下记住板块号（tapBk）；click 找不到 [data-bk] 或 click 根本没到 → 用 tapBk 打开。 */
+const bindAllSrc = seg(src, /function flowMarkTap\(ev\)\{/, /\nvar flowOpenSheet/, 0);
 const bindAllCode = stripComments(bindAllSrc);
-ok(/function flowMarkTap\(\)\{ FLOW\.tapUntil = Date\.now\(\) \+ 1400 \}/.test(bindAllCode),
+ok(bindAllSrc.length > 300, '取到触摸保护源码段', 'len=' + bindAllSrc.length);
+ok(/FLOW\.tapUntil = Date\.now\(\) \+ 1400/.test(bindAllCode),
   '触摸保护窗口 1.4s（flowMarkTap 为模块级同一引用，靠 addEventListener 去重）');
+ok(/FLOW\.tapBk = el \? el\.getAttribute\('data-bk'\) : ''/.test(bindAllCode),
+  '按下时记住手指所在板块号（供 DOM 被换掉后兜底）');
+ok(/function flowTapMoved\(\)\{ FLOW\.tapBk = '' \}/.test(bindAllCode),
+  'touchmove 取消兜底（滑动翻页不会被误判成点击）');
+ok(/if\(FLOW\.tapBk !== bk\) return/.test(bindAllCode) && /Date\.now\(\) - at > 1500/.test(bindAllCode),
+  'touchend 后 320ms 兜底：click 没到就按记下的板块打开（且不重复打开）');
+ok(/addEventListener\('touchend', flowTapEnd/.test(bindAllCode) &&
+  /addEventListener\('touchmove', flowTapMoved/.test(bindAllCode),
+  '两栏都挂 touchend 兜底 + touchmove 取消');
+ok(/if\(!bk && FLOW\.tapBk && Date\.now\(\) - \(FLOW\.tapAt \|\| 0\) < 1500\) bk = FLOW\.tapBk/.test(bindAllCode),
+  'click 里找不到 [data-bk]（节点已被换掉）时用记住的板块兜底');
 ok(/function flowTapBusy\(\)\{ return Date\.now\(\) < \(FLOW\.tapUntil \|\| 0\) ?\}/.test(bindAllCode),
   'flowTapBusy 判定函数存在');
 ok(/addEventListener\('touchstart', flowMarkTap/.test(bindAllCode) &&
   /addEventListener\('pointerdown', flowMarkTap/.test(bindAllCode),
   '两栏都挂 touchstart + pointerdown（手机触摸 + 桌面鼠标全覆盖）');
+/* 6b-2) 后台补渲统一出口：自动刷新是**新一次 flowLoad**，旧守卫护不住它的首绘 */
+const idleSrc = seg(src, /function flowPaintIfIdle\(bg\)\{/, /\n\/\* ===== 板块/, 0);
+const idleCode = stripComments(idleSrc);
+ok(idleSrc.length > 200, '取到 flowPaintIfIdle 源码段', 'len=' + idleSrc.length);
+ok(/if\(bg && flowTapBusy\(\) && \$\('flowIn'\)\.querySelector\('\.flow-rk'\)\)/.test(idleCode),
+  '后台补渲撞上触摸窗口且列表在屏上时让路');
+ok(/FLOW\._deferT = setTimeout\(/.test(idleCode), '让路后安排一次延迟补渲（不是丢弃）');
 const paintSrc = seg(src, /var paint = function\(\)\{/, /\n      paint\(\)/, 0);
 const paintCode = stripComments(paintSrc);
 ok(paintSrc.length > 500, '取到 flowLoad·paint 源码段', 'len=' + paintSrc.length);
-ok(/if\(st\.painted && flowTapBusy\(\)\) return/.test(paintCode),
-  '后台补渲撞上触摸窗口时让路（数据已存，下轮再画；首屏不受限）');
-ok(/if\(flowTapBusy\(\)\)\{ setTimeout\(/.test(paintCode),
-  '涨停池晚到的重渲同样受触摸保护（推迟而非丢弃）');
+ok(/if\(!flowPaintIfIdle\(!!silent\)\) return/.test(paintCode),
+  '自动刷新(silent)让路、显式刷新立刻画（旧 st.painted 守卫恰漏掉本次加载的首绘）');
+ok(!/st\.painted && flowTapBusy\(\)/.test(paintCode),
+  '不再使用「只护第二次补渲」的旧守卫（它是漏掉主场景的根因）');
+ok(/ztLoad\(\)\.then\(function\(\)\{ flowPaintIfIdle\(true\) \}/.test(paintCode),
+  '涨停池晚到的重渲同样走让路出口（推迟而非丢弃）');
 /* 6c) 回前台的补刷延后 1.5s（回来瞬间往往正要点第一下） */
 const visSrc = seg(src, /document\.addEventListener\('visibilitychange'/, /\nfunction flowFmtYi/, 0);
 const visCode = stripComments(visSrc);

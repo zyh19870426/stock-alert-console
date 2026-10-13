@@ -10381,36 +10381,94 @@ function flowMore(more){
 }
 function flowOpenByBk(bk){
   if(!bk) return false
+  /* ★ 2026-10-13 去抖：手机上 click 可能晚于 touchend 兜底到达 → 同一板块 0.8s 内只开一次 */
+  if(bk === FLOW.lastOpenBk && Date.now() - (FLOW.lastOpenAt || 0) < 800) return true
+  FLOW.lastOpenBk = bk; FLOW.lastOpenAt = Date.now()
   for(var i=0;i<(FLOW.boards||[]).length;i++) if(FLOW.boards[i].bk === bk) return flowOpenSheet(bk), true
-  /* ★ 2026-10-11：找不到板块也要给反馈，不能静默 —— 否则用户以为「点了没反应」 */
-  var nm = $('flowShName') || null
+  /* ★ 2026-10-11：找不到板块也要给反馈，不能静默 —— 否则用户以为「点了没反应」。
+   * ★ 2026-10-13：反馈从「只写日志」升级为**真的弹窗**（日志用户看不见，观感仍是没反应）。 */
   try{ logOp('资金流·点击板块未命中', { bk:bk, n:(FLOW.boards||[]).length }) }catch(e){}
+  $('flowShTitle').textContent = '板块 ' + bk
+  $('flowShStat').innerHTML = ''
+  $('flowShStocks').innerHTML = '<div class="sr"><span class="nm" style="color:#8a8f96;white-space:normal;line-height:1.7;">' +
+    '这个板块此刻不在页面数据里（可能刚被刷新换掉）。<br>请点右上角「刷新」后重试。</span></div>'
+  $('flowShNote').textContent = ''
+  $('sheetFlow').classList.add('on'); $('mask').classList.add('on')
   return false
 }
 /* ★ 触摸保护（2026-10-13）：手指落在两栏上的 1.4s 内，后台补渲一律让路 ——
  * 否则「按下→抬起」之间 DOM 被整体替换，这次点击就被浏览器吞掉（表现为点了没反应）。
  * flowMarkTap 必须是**模块级同一引用**：addEventListener 靠引用去重，flowBindClicks 每次重渲
- * 都会重挂，箭头函数/内联函数会越挂越多。 */
-function flowMarkTap(){ FLOW.tapUntil = Date.now() + 1400 }
+ * 都会重挂，箭头函数/内联函数会越挂越多。
+ * ★ 同日二次加固（用户手机实测「弹窗完全不出来」）：光「不重画」还不够稳 ——
+ *   真机上仍可能①在极短的补渲染窗口内被换掉节点，②部分内核在节点被替换后干脆不派发 click。
+ *   故再加两道兜底：
+ *     · 按下时把手指所在板块记进 FLOW.tapBk（flowMarkTap）；
+ *     · click 里若找不到 [data-bk]（节点已被换掉）→ 用记下的板块打开；
+ *     · touchend 后 320ms 若 click 始终没到（tapBk 还在）→ 直接按记下的板块打开。
+ *   滑动会清掉 tapBk（flowTapMoved），所以翻页/滚动手势不会被误判成点击。 */
+function flowMarkTap(ev){
+  FLOW.tapUntil = Date.now() + 1400
+  FLOW.tapMoved = false
+  var el = (ev && ev.target && ev.target.closest) ? ev.target.closest('[data-bk]') : null
+  FLOW.tapBk = el ? el.getAttribute('data-bk') : ''
+  FLOW.tapAt = Date.now()
+}
+function flowTapMoved(){ FLOW.tapBk = '' }           /* 滑动 → 不是点击，取消兜底 */
+function flowTapEnd(){
+  if(!FLOW.tapBk) return
+  var bk = FLOW.tapBk, at = FLOW.tapAt || 0
+  setTimeout(function(){
+    if(FLOW.tapBk !== bk) return                    /* click 已经消费掉 → 不重复打开 */
+    if(Date.now() - at > 1500) return               /* 超出保护窗口 → 不是这次点击 */
+    FLOW.tapBk = ''
+    try{ logOp('资金流·click 未到达，按按下板块兜底打开', { bk:bk }) }catch(e){}
+    flowOpenByBk(bk)
+  }, 320)
+}
 function flowTapBusy(){ return Date.now() < (FLOW.tapUntil || 0) }
 function flowBindClicks(){
   var handler = function(ev){
     if(!ev.target || !ev.target.closest) return
     var more = ev.target.closest('.flow-more')
-    if(more){ flowMore(more); return }
+    if(more){ FLOW.tapBk = ''; flowMore(more); return }
     /* ★ 2026-10-11 修：原实现只认 `circle[data-bk]` 和 `.flow-rk`，但圆球是内联 SVG，
        `circle[data-bk]` 在**部分内核下** closest 对 SVG 元素支持不一致 → 点击落到「没反应」。
        现改为「先取最近的带 data-bk 元素」，圆形/文字/牌子/整行一律有效。 */
     var t = ev.target.closest('[data-bk]')
-    if(t){ flowOpenByBk(t.getAttribute('data-bk')); return }
+    var bk = t ? t.getAttribute('data-bk') : ''
+    /* ★ 2026-10-13 兜底：触摸目标已被自动刷新换掉 → 用按下时记住的板块号 */
+    if(!bk && FLOW.tapBk && Date.now() - (FLOW.tapAt || 0) < 1500) bk = FLOW.tapBk
+    if(bk){ FLOW.tapBk = ''; flowOpenByBk(bk); return }
   }
   /* passive 只读不打断滚动；pointerdown 覆盖 鼠标/触摸/笔 三种指针 */
   $('flowIn').addEventListener('touchstart', flowMarkTap, {passive:true})
   $('flowOut').addEventListener('touchstart', flowMarkTap, {passive:true})
   $('flowIn').addEventListener('pointerdown', flowMarkTap, {passive:true})
   $('flowOut').addEventListener('pointerdown', flowMarkTap, {passive:true})
+  $('flowIn').addEventListener('touchmove', flowTapMoved, {passive:true})
+  $('flowOut').addEventListener('touchmove', flowTapMoved, {passive:true})
+  $('flowIn').addEventListener('touchend', flowTapEnd, {passive:true})
+  $('flowOut').addEventListener('touchend', flowTapEnd, {passive:true})
   $('flowIn').onclick = handler
   $('flowOut').onclick = handler
+}
+/* ★ 后台补渲的**统一出口**（2026-10-13）：手指还落在两栏上时让路 —— 数据早已写进
+ * FLOW.boards，下一次自然补上。绝不为「后台数据晚到」打断一次进行中的点击。
+ * bg=true = 自动轮询 / 回前台 / 晚到的权威源 / 涨停池补渲（可让路）；
+ * bg=false = 显式刷新（进页面、点右上「刷新」）—— 用户正等着看，必须立刻画。 */
+function flowPaintIfIdle(bg){
+  if(bg && flowTapBusy() && $('flowIn').querySelector('.flow-rk')){
+    if(!FLOW._deferT){
+      FLOW._deferT = setTimeout(function(){
+        FLOW._deferT = 0
+        try{ flowRender(); flowBindClicks() }catch(e){ try{ logErr('资金流·延迟补渲', e) }catch(e2){} }
+      }, 1600)
+    }
+    return false
+  }
+  flowRender(); flowBindClicks()
+  return true
 }
 /* ===== 板块「主力净流入前 5 个股」（★ 2026-10-10 改为主读云端预生成存档）=====
  * 根因：这条明细原来打 push2 **个股级** clist（fs=b:BKxxxx&fid=f62）。本机公网 IP 已被东财
@@ -10567,6 +10625,9 @@ var flowOpenSheet = async function(bk){
   var b = null
   for(var i=0;i<(FLOW.boards||[]).length;i++) if(FLOW.boards[i].bk === bk){ b = FLOW.boards[i]; break }
   if(!b) return
+  /* ★ 2026-10-13：**先开窗、再填内容** —— 手指确实点在板块上，弹窗就一定出得来；
+     后面任何数据异常都不该再表现为「点了完全没反应」（同步段不换行渲染，不会闪上一版内容）。 */
+  $('sheetFlow').classList.add('on'); $('mask').classList.add('on')
   $('flowShTitle').textContent = b.name + '（' + bk + '）'
   var col = flowColor(b)
   var stTxt = b.streak > 0 ? '连续流入 ' + b.streak + ' 天' : (b.streak < 0 ? '连续流出 ' + (-b.streak) + ' 天' : '今日持平')
@@ -10609,7 +10670,6 @@ var flowOpenSheet = async function(bk){
   paintStat(null)
   $('flowShStocks').innerHTML = '<div class="sr"><span class="nm" style="color:#8a8f96;">正在读取本板块主力净流入前 5…</span></div>'
   $('flowShNote').textContent = ''
-  $('sheetFlow').classList.add('on'); $('mask').classList.add('on')
   try{
     /* ★ 2026-10-10 修（用户第三次报「点击还是没反应」）：旧实现 `flowRetry(flowFetchStocks, 3)`
      *   在**外层**又包了一层重试 —— 内层的 STK_EM_BUDGET_MS(1.5s) 只管单次，外层 3 次 + 退避
@@ -11201,21 +11261,19 @@ async function flowLoad(force, silent){
         if(cooling && !tmap) stampTxt += ' · 东财冷却中（' + Math.ceil(Math.max(0, FLOW.coolUntil - Date.now()) / 60000) + ' 分钟后自动重试）'
         /* ★ 2026-10-13：追加「存档 <口径日> · 刷新 <本地时刻>」 */
         $('flowStamp').textContent = stampTxt + flowFreshSuffix()
-        /* ★ 触摸保护：这是**后台补渲**（首屏已画过，st.painted 已真）而用户手指正落在两栏上
-           → 这次不画。数据已写进 FLOW.boards，下一次自动刷新 / 手动刷新自然带上；
-           绝不能为了后台数据打断一次进行中的点击（那会吞掉点击 = 「弹窗不出来」）。 */
-        if(st.painted && flowTapBusy()) return
-        flowRender(); flowBindClicks()
+        /* ★ 触摸保护（2026-10-13 二次加固）：统一走 flowPaintIfIdle —— silent（自动轮询 / 回前台）
+           属于**后台补渲**，手指正落在两栏上就让路（数据已写进 FLOW.boards，下轮自然带上）；
+           显式刷新（进页面 / 点右上「刷新」）必须立刻画。
+           旧写法 `st.painted && flowTapBusy()` 只护住「同一次加载的第二次补渲」，
+           而自动刷新是**新的一次 flowLoad**（st.painted 初值为 false）→ 恰好漏掉吞点击的主场景。 */
+        if(!flowPaintIfIdle(!!silent)) return
         st.painted = true
-        /* 涨停结构（1 个 JSONP 请求，非阻塞）：首屏不等它，到了再重渲一次补上标签。
+        /* 涨停结构（1 个 JSONP 请求，非阻塞）：首屏不等它，到了再补渲一次补上标签。
          * 失败也不影响资金数据（降级为「涨停结构暂不可用」）。
-         * ★ 重渲同样受触摸保护：正被点时推迟 1.6s 再画（标签晚几秒无所谓）。 */
+         * ★ 重渲走统一出口：正被点时推迟 1.6s 再画（标签晚几秒无所谓）。 */
         if(!ZT.pool && !st.ztHooked){
           st.ztHooked = true
-          ztLoad().then(function(){
-            if(flowTapBusy()){ setTimeout(function(){ try{ flowRender(); flowBindClicks() }catch(e2){} }, 1600) }
-            else { flowRender(); flowBindClicks() }
-          }, function(){})
+          ztLoad().then(function(){ flowPaintIfIdle(true) }, function(){})
         }
         try{
           var hh = new Date()
