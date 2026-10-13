@@ -154,5 +154,32 @@ ok(/src:\s*cloudFail \? 'cloudfail' : 'nostk'/.test(fetchStkCode),
 ok(src.indexOf('此刻云端存档和东财实时都取不到') > 0,
   '空态文案按真实原因分流（不再把失败说成「存档还没有」）');
 
+/* 8) ★ 2026-10-13 真因锁：缺值判定不得只用 isFinite
+ * `isFinite(null)` / `isFinite('')` 均为 **true**（Number(null)===0）⇒ null.toFixed() 抛
+ * TypeError ⇒ flowOpenSheet→paintStat→flowFmtPct 抛异常 ⇒ 弹窗表头之后全部没填
+ * ⇒ 用户看到「点板块没反应、不出前 5 个股」。这是本次网上问题的**真因**。
+ * 用「提取纯函数 + 实跑」验证（纯源码正则判不出会不会抛）。 */
+const fmtSrc = seg(src, /function flowNum\(v\)\{/, /\nfunction flowToday/, 0);
+ok(fmtSrc.length > 150, '取到 flowNum/flowFmtYi/flowFmtPct 源码段', 'len=' + fmtSrc.length);
+try {
+  const F = new Function(fmtSrc + '\nreturn { flowNum: flowNum, flowFmtYi: flowFmtYi, flowFmtPct: flowFmtPct }')();
+  ok(F.flowFmtPct(null) === '—', 'flowFmtPct(null) 返回「—」而不是抛 TypeError（真因）');
+  ok(F.flowFmtPct('') === '—', "flowFmtPct('') 返回「—」（空串同样是 isFinite 陷阱）");
+  ok(F.flowFmtYi(null) === '—', 'flowFmtYi(null) 返回「—」');
+  ok(F.flowFmtYi('') === '—', "flowFmtYi('') 返回「—」");
+  ok(F.flowFmtPct(1.234) === '+1.23%', '正常值仍正确 flowFmtPct(1.234)=+1.23%');
+  ok(F.flowFmtPct(-2) === '-2.00%', '负值带负号 flowFmtPct(-2)=-2.00%');
+  ok(F.flowFmtYi(1e8) === '+1.0亿', '正常值仍正确 flowFmtYi(1e8)=+1.0亿');
+  ok(F.flowNum('3') === 3 && F.flowNum('-') === null, "数字串可转、'-' 判为缺值");
+} catch (e) { ok(false, '纯函数实跑（flowFmtPct/flowFmtYi）', e.message); }
+/* 8b) 弹窗必须「先占位再算表头」，且表头计算整体兜 try/catch */
+const sheetSrc = seg(src, /var flowOpenSheet = async function\(bk\)\{/, /\nvar flowFetchStocks = async function/, 0);
+ok(sheetSrc.length > 800, '取到 flowOpenSheet 源码段', 'len=' + sheetSrc.length);
+ok(sheetSrc.indexOf('正在读取本板块主力净流入前 5…') > 0 &&
+  sheetSrc.indexOf('正在读取本板块主力净流入前 5…') < sheetSrc.indexOf('paintStat(null)'),
+  '先占位（正在读取…）再算表头 —— 表头异常也不会让弹窗一片空白');
+ok(/logErr\('资金流·弹窗表头', e\)/.test(sheetSrc), '表头计算有 try/catch 兜底（异常不再吞掉整段渲染）');
+ok(/flowNum\(b\.chg\)/.test(sheetSrc), '板块涨跌的正负判定也走 flowNum（null 不再当 0 用）');
+
 console.log(pass + ' pass / ' + fail + ' fail');
 process.exit(fail ? 1 : 0);

@@ -1111,6 +1111,23 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
       on.indexOf('常见原因：①东财接口限流') < 0);
     chk('★ [F7] 降级路径记入自检流水（logOp 资金流·个股明细为空）',
       on.indexOf("logOp('资金流·个股明细为空'") >= 0);
+    /* ★ [F18]（2026-10-13）「点板块没反应、不出前 5 个股」的**真因**线上锁：
+     *   chg 等字段为 null 时，旧 flowFmtPct 用 isFinite(null)===true 放过 → null.toFixed() 抛
+     *   ⇒ flowOpenSheet→paintStat 抛异常 ⇒ 弹窗表头之后全部没填 ⇒ 看起来「点了没反应」。
+     *   线上必须：① 收口到 flowNum()；② 表头计算兜 try/catch；③ 先占位再算表头。 */
+    chk('★ [F18] 缺值判定收口到 flowNum（不再只用 isFinite，躲开 isFinite(null)===true 陷阱）',
+      /function flowNum\(v\)\{/.test(onNoCmt) &&
+      /var n = flowNum\(v\); if\(n === null\) return '—'/.test(onNoCmt) &&
+      !/function flowFmtPct\(v\)\{ return isFinite\(v\)/.test(onNoCmt));
+    chk('★ [F18] 弹窗表头计算兜 try/catch（异常不再吞掉整段渲染）',
+      on.indexOf("logErr('资金流·弹窗表头'") >= 0);
+    chk('★ [F18] 弹窗先占位（正在读取…）再算表头（表头异常也不会一片空白）',
+      (function () {
+        const fn = between(on, 'var flowOpenSheet = async function', '\nvar flowFetchStocks = async function');
+        const iRead = fn.indexOf('正在读取本板块主力净流入前 5');
+        const iStat = fn.indexOf('paintStat(null)');
+        return iRead > 0 && iStat > iRead;
+      })());
 
     /* ===== F8（2026-10-10）「连续天数塌成 ±1 + 扩散度/★核心消失」的修复 =====
      * 报障原话：「流入的数据都是连续3天的，现在变成1天了…每一行都显示了核心、扩散度的情况，

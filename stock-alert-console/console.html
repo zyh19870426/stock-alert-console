@@ -9937,14 +9937,32 @@ document.addEventListener('visibilitychange', function(){
   if(briefHomeVisible() && (!FLOW_BRIEF.at || Date.now() - FLOW_BRIEF.at > 60000)){ try{ flowBriefEnsure(true) }catch(e){} }
   flowAutoKick(); briefAutoKick()
 })
-function flowFmtYi(v){
-  if(!isFinite(v)) return '—'
-  return (v >= 0 ? '+' : '') + (v / 1e8).toFixed(1) + '亿'
+/* ★ 2026-10-13 修（用户报「点板块没反应 / 不出前 5 股票」的**真因**）：
+ *   缺值判定**绝不能只用 isFinite** —— `isFinite(null)` 与 `isFinite('')` 都是 **true**
+ *   （Number(null)===0、Number('')===0），紧接着 `null.toFixed()` 直接抛 TypeError。
+ *   实测链路：板块 chg 为 null → flowOpenSheet → paintStat → flowFmtPct 抛异常
+ *   → 弹窗**表头之后的全部内容都没填上**（明细区一片空白）⇒ 用户看到的就是「点了没反应」。
+ *   本项目早记过这条坑（缺值判 v==null||v===''），这里把它收口到一个 flowNum()。 */
+function flowNum(v){
+  if(v === null || v === undefined || v === '') return null
+  var n = Number(v)
+  return isFinite(n) ? n : null
 }
-function flowFmtPct(v){ return isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) + '%' : '—' }
+function flowFmtYi(v){
+  var n = flowNum(v); if(n === null) return '—'
+  return (n >= 0 ? '+' : '') + (n / 1e8).toFixed(1) + '亿'
+}
+function flowFmtPct(v){
+  var n = flowNum(v); if(n === null) return '—'
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'
+}
 function flowToday(){ var d = new Date(); return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2) }
 /* 气泡大小取值：优先当月累计，历史未补齐时退回当日 */
-function flowMag(b){ var v = (isFinite(b.cum) && b.cum !== 0) ? b.cum : b.today; return isFinite(v) ? v : 0 }
+function flowMag(b){
+  var a = flowNum(b.cum), t = flowNum(b.today)
+  var v = (a !== null && a !== 0) ? a : t
+  return v === null ? 0 : v
+}
 /* 东财通道实测抖动大且会对高频 IP 限流 → 关键请求带指数退避自动重试（1.5s/4s/9s） */
 var flowRetry = async function(fn, times){
   var last = null, gap = 1500
@@ -10624,51 +10642,59 @@ var flowOpenSheet = async function(bk){
   var b = null
   for(var i=0;i<(FLOW.boards||[]).length;i++) if(FLOW.boards[i].bk === bk){ b = FLOW.boards[i]; break }
   if(!b) return
-  /* ★ 2026-10-13：**先开窗、再填内容** —— 手指确实点在板块上，弹窗就一定出得来；
-     后面任何数据异常都不该再表现为「点了完全没反应」（同步段不换行渲染，不会闪上一版内容）。 */
+  /* ★ 2026-10-13：**先开窗 → 先占位 → 再算表头** ——
+     ① 手指确实点在板块上，弹窗就一定出得来；
+     ② 表头计算涉及一堆板块字段，任一字段缺值（实测 chg=null 会抛 TypeError）都不许
+        让弹窗变成一片空白。整段同步执行，不会先闪上一版内容。 */
   $('sheetFlow').classList.add('on'); $('mask').classList.add('on')
   $('flowShTitle').textContent = b.name + '（' + bk + '）'
-  var col = flowColor(b)
-  var stTxt = b.streak > 0 ? '连续流入 ' + b.streak + ' 天' : (b.streak < 0 ? '连续流出 ' + (-b.streak) + ' 天' : '今日持平')
-  /* 涨停结构 + 广度 + 领涨（2026-10-07）：满宽一行，帮判断「这个板块值不值得进、龙头是谁」。
-   * 两个涨停口径刻意**分开标注**，避免被读成同一个数：
-   *   · 行业归属（hybk）——涨停池只给行业简称，所以只有行业板块名能匹配上；
-   *   · 本板块（成分股 ∩ 涨停池）——异步精确自算，概念板块也成立（slow 到了再补画）。 */
-  var zt = ztBkOf(b.name)
-  var br = flowBreadth(b)
-  var line2 = []
-  if(isFinite(br)) line2.push('扩散 <b class="' + (br >= 0.6 ? 'flow-up' : '') + '">' + Math.round(br * 100) + '%</b>（涨 ' + b.nUp + ' / 跌 ' + b.nDown + '）')
-  if(b.leadName) line2.push('领涨 <b>' + esc(b.leadName) + '</b> ' + flowFmtPct(b.leadChg) +
-    (flowLimitUp(b.leadChg, b.leadCode) ? ' <span class="flow-up">涨停</span>' : '') +
-    (b.nLead > 1 ? '（并列' + b.nLead + '只）' : ''))
-  var paintStat = function(self){
-    var line = []
-    if(zt){
-      line.push('行业归属涨停 <b class="flow-up">' + zt.n + '</b> 家 · 最高 <b>' + zt.maxLb + '</b> 板' +
-        (zt.n2 >= 2 ? ' · 2板以上 ' + zt.n2 + ' 家' : '') + (zt.zb ? ' · 炸板 ' + zt.zb + ' 家' : '') +
-        ' · <b>' + zt.tier + '</b> · 封单 ' + catFund(zt.fund))
-    } else {
-      line.push('行业归属未匹配到本板块名（概念板块正常现象）')
-    }
-    if(self){
-      line.push('<b class="flow-up">' + (self.atLeast ? '≥' : '') + self.n + '</b> 家涨停（本板块成分股 ∩ 涨停池' +
-        (self.n ? ' · 最高 ' + self.maxLb + ' 板' + (self.n2 >= 2 ? ' · 2板以上 ' + self.n2 + ' 家' : '') +
-          (self.lead ? ' · 龙头 ' + esc(self.lead) : '') : '') +
-        '，共扫 ' + self.scan + '/' + self.total + ' 只）')
-    }
-    $('flowShStat').innerHTML =
-      '<div class="c"><div class="v ' + col.cls + '">' + flowFmtYi(b.today) + '</div><div class="k">当日主力</div></div>' +
-      '<div class="c"><div class="v ' + col.cls + '">' + flowFmtYi(b.cum) + '</div><div class="k">当月累计</div></div>' +
-      '<div class="c"><div class="v">' + stTxt.replace('连续', '').replace(' ', '<br>') + '</div><div class="k">连续性</div></div>' +
-      '<div class="c"><div class="v ' + (b.chg >= 0 ? 'flow-up' : 'flow-dn') + '">' + flowFmtPct(b.chg) + '</div><div class="k">板块涨跌</div></div>' +
-      '<div class="c" style="grid-column:1/-1;text-align:left;padding:8px 10px;line-height:1.75;">' +
-        line.join('<br>') + (line2.length ? '<br>' + line2.join(' · ') + (b.core ? ' · <span class="ztc core" style="display:inline-block;">★核心</span>' : '') : '') +
-      '</div>' +
-      flowKindBlock(b.name)
-  }
-  paintStat(null)
   $('flowShStocks').innerHTML = '<div class="sr"><span class="nm" style="color:#8a8f96;">正在读取本板块主力净流入前 5…</span></div>'
   $('flowShNote').textContent = ''
+  var col, stTxt, zt, br, line2 = [], paintStat = null
+  try{
+    col = flowColor(b)
+    stTxt = b.streak > 0 ? '连续流入 ' + b.streak + ' 天' : (b.streak < 0 ? '连续流出 ' + (-b.streak) + ' 天' : '今日持平')
+    /* 涨停结构 + 广度 + 领涨（2026-10-07）：满宽一行，帮判断「这个板块值不值得进、龙头是谁」。
+     * 两个涨停口径刻意**分开标注**，避免被读成同一个数：
+     *   · 行业归属（hybk）——涨停池只给行业简称，所以只有行业板块名能匹配上；
+     *   · 本板块（成分股 ∩ 涨停池）——异步精确自算，概念板块也成立（slow 到了再补画）。 */
+    zt = ztBkOf(b.name)
+    br = flowBreadth(b)
+    if(isFinite(br)) line2.push('扩散 <b class="' + (br >= 0.6 ? 'flow-up' : '') + '">' + Math.round(br * 100) + '%</b>（涨 ' + b.nUp + ' / 跌 ' + b.nDown + '）')
+    if(b.leadName) line2.push('领涨 <b>' + esc(b.leadName) + '</b> ' + flowFmtPct(b.leadChg) +
+      (flowLimitUp(b.leadChg, b.leadCode) ? ' <span class="flow-up">涨停</span>' : '') +
+      (b.nLead > 1 ? '（并列' + b.nLead + '只）' : ''))
+    paintStat = function(self){
+      var line = []
+      if(zt){
+        line.push('行业归属涨停 <b class="flow-up">' + zt.n + '</b> 家 · 最高 <b>' + zt.maxLb + '</b> 板' +
+          (zt.n2 >= 2 ? ' · 2板以上 ' + zt.n2 + ' 家' : '') + (zt.zb ? ' · 炸板 ' + zt.zb + ' 家' : '') +
+          ' · <b>' + zt.tier + '</b> · 封单 ' + catFund(zt.fund))
+      } else {
+        line.push('行业归属未匹配到本板块名（概念板块正常现象）')
+      }
+      if(self){
+        line.push('<b class="flow-up">' + (self.atLeast ? '≥' : '') + self.n + '</b> 家涨停（本板块成分股 ∩ 涨停池' +
+          (self.n ? ' · 最高 ' + self.maxLb + ' 板' + (self.n2 >= 2 ? ' · 2板以上 ' + self.n2 + ' 家' : '') +
+            (self.lead ? ' · 龙头 ' + esc(self.lead) : '') : '') +
+          '，共扫 ' + self.scan + '/' + self.total + ' 只）')
+      }
+      $('flowShStat').innerHTML =
+        '<div class="c"><div class="v ' + col.cls + '">' + flowFmtYi(b.today) + '</div><div class="k">当日主力</div></div>' +
+        '<div class="c"><div class="v ' + col.cls + '">' + flowFmtYi(b.cum) + '</div><div class="k">当月累计</div></div>' +
+        '<div class="c"><div class="v">' + stTxt.replace('连续', '').replace(' ', '<br>') + '</div><div class="k">连续性</div></div>' +
+        '<div class="c"><div class="v ' + ((flowNum(b.chg) || 0) >= 0 ? 'flow-up' : 'flow-dn') + '">' + flowFmtPct(b.chg) + '</div><div class="k">板块涨跌</div></div>' +
+        '<div class="c" style="grid-column:1/-1;text-align:left;padding:8px 10px;line-height:1.75;">' +
+          line.join('<br>') + (line2.length ? '<br>' + line2.join(' · ') + (b.core ? ' · <span class="ztc core" style="display:inline-block;">★核心</span>' : '') : '') +
+        '</div>' +
+        flowKindBlock(b.name)
+    }
+    paintStat(null)
+  }catch(e){
+    /* ★ 表头出问题也绝不让弹窗空着：如实说明，明细区照常继续取数 */
+    try{ logErr('资金流·弹窗表头', e) }catch(e2){}
+    $('flowShStat').innerHTML = '<div class="c" style="grid-column:1/-1;text-align:left;padding:8px 10px;color:#8a8f96;line-height:1.7;">板块表头信息计算异常（已记入「设置 → 系统自检」），下方个股明细不受影响。</div>'
+  }
   try{
     /* ★ 2026-10-10 修（用户第三次报「点击还是没反应」）：旧实现 `flowRetry(flowFetchStocks, 3)`
      *   在**外层**又包了一层重试 —— 内层的 STK_EM_BUDGET_MS(1.5s) 只管单次，外层 3 次 + 退避
