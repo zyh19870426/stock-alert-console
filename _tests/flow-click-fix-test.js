@@ -76,5 +76,56 @@ const swapSrc = seg(src, /function emSwap\(url, host\)\{/, /\nfunction fetchT/, 
 ok(/push2\(\?:test\|delay\|his\)\?/.test(swapSrc) && !/push2ex/.test(swapSrc),
   'emSwap 正则排除 push2ex（涨停池专用路径在 push2test 上 404）');
 
+/* 6) ★ 2026-10-13 手机「点板块弹窗完全不出来」修复 —— 三道锁
+ * 根因：自动刷新/回前台/东财增量补渲每次**整体替换**两栏 DOM；手机上锁屏、切微信再回来的
+ * 瞬间正要点板块 ⇒ 触摸目标被换掉 ⇒ 点击被浏览器吞掉。 */
+/* 6a) flowRender：内容没变就不重建 DOM（消灭绝大多数无意义重建） */
+const renderSrc = seg(src, /function flowRender\(\)\{/, /\nfunction flowMore/, 0);
+const renderCode = stripComments(renderSrc);
+ok(renderSrc.length > 200, '取到 flowRender 源码段', 'len=' + renderSrc.length);
+ok(/FLOW\._lastIn === hIn && FLOW\._lastOut === hOut/.test(renderCode),
+  'flowRender 内容不变时跳过重建（不动 DOM 才不会吞点击）');
+ok(/querySelector\('\.flow-rk'\)/.test(renderCode),
+  '跳过前提是列表确实在屏上（空态/加载占位必须照常画）');
+ok(/FLOW\._lastIn = hIn/.test(renderCode), '跳过判断后有回写上次产物（否则永不更新）');
+/* 6b) 触摸保护：flowMarkTap/flowTapBusy + 后台补渲让路 */
+const bindAllSrc = seg(src, /function flowMarkTap\(\)\{/, /\nvar flowOpenSheet/, 0);
+const bindAllCode = stripComments(bindAllSrc);
+ok(/function flowMarkTap\(\)\{ FLOW\.tapUntil = Date\.now\(\) \+ 1400 \}/.test(bindAllCode),
+  '触摸保护窗口 1.4s（flowMarkTap 为模块级同一引用，靠 addEventListener 去重）');
+ok(/function flowTapBusy\(\)\{ return Date\.now\(\) < \(FLOW\.tapUntil \|\| 0\) ?\}/.test(bindAllCode),
+  'flowTapBusy 判定函数存在');
+ok(/addEventListener\('touchstart', flowMarkTap/.test(bindAllCode) &&
+  /addEventListener\('pointerdown', flowMarkTap/.test(bindAllCode),
+  '两栏都挂 touchstart + pointerdown（手机触摸 + 桌面鼠标全覆盖）');
+const paintSrc = seg(src, /var paint = function\(\)\{/, /\n      paint\(\)/, 0);
+const paintCode = stripComments(paintSrc);
+ok(paintSrc.length > 500, '取到 flowLoad·paint 源码段', 'len=' + paintSrc.length);
+ok(/if\(st\.painted && flowTapBusy\(\)\) return/.test(paintCode),
+  '后台补渲撞上触摸窗口时让路（数据已存，下轮再画；首屏不受限）');
+ok(/if\(flowTapBusy\(\)\)\{ setTimeout\(/.test(paintCode),
+  '涨停池晚到的重渲同样受触摸保护（推迟而非丢弃）');
+/* 6c) 回前台的补刷延后 1.5s（回来瞬间往往正要点第一下） */
+const visSrc = seg(src, /document\.addEventListener\('visibilitychange'/, /\nfunction flowFmtYi/, 0);
+const visCode = stripComments(visSrc);
+ok(/setTimeout\(function\(\)\{ if\(!document\.hidden && flowPageOpen\(\)\)/.test(visCode) &&
+  /,\s*1500\)/.test(visCode),
+  '回前台的补刷延后 1.5s 且再次校验可见性（不再瞬间替换 DOM）');
+
+/* 7) ★ 弹窗明细的云端腿必须有硬预算（4s），不得陪首屏的 20s 单源超时一起等 */
+const fetchStkSrc = seg(src, /var flowFetchStocks = async function/, /\n\/\* 板块成分股/, 0);
+const fetchStkCode = stripComments(fetchStkSrc);
+ok(fetchStkSrc.length > 400, '取到 flowFetchStocks 源码段', 'len=' + fetchStkSrc.length);
+ok(/var FLOW_STK_CLOUD_MS = 4000/.test(stripComments(src)),
+  '弹窗云端腿预算常量 FLOW_STK_CLOUD_MS = 4000');
+ok(/flowWithBudget\(cloudP2, FLOW_STK_CLOUD_MS/.test(fetchStkCode),
+  '云端腿套 4s 硬预算（最坏 1.5+4=5.5s 内必有结果）');
+ok(/cloud = FLOW\.cloudRaw \|\| null/.test(fetchStkCode),
+  '预算超时退回内存已有存档（首屏多半已拉到，0 等待）');
+ok(/src:\s*cloudFail \? 'cloudfail' : 'nostk'/.test(fetchStkCode),
+  '取数失败标记为 cloudfail（与 miss=存档没覆盖 严格分开）');
+ok(src.indexOf('此刻云端存档和东财实时都取不到') > 0,
+  '空态文案按真实原因分流（不再把失败说成「存档还没有」）');
+
 console.log(pass + ' pass / ' + fail + ' fail');
 process.exit(fail ? 1 : 0);

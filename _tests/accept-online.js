@@ -1103,7 +1103,8 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
       /云端预生成/.test(on) && /数据日/.test(on) && /<\/div>'\s*\+\s*h/.test(onNoCmt));
     chk('★ [F7] 明说是收盘口径', on.indexOf('非盘中实时') >= 0);
     chk('★ [F7] 来源行样式 .flow-stocks .src 已上线', /\.flow-stocks \.src\{/.test(on));
-    chk('★ [F7] 空态如实说「云端存档还没有个股明细段」', on.indexOf('云端存档还没有「个股明细」段') >= 0);
+    chk('★ [F7] 空态按真实原因分流（cloudfail=取数失败 ≠ miss=存档没覆盖）',
+      on.indexOf('此刻云端存档和东财实时都取不到') >= 0 && /src:\s*'cloudfail'/.test(onNoCmt));
     chk('★ [F7] 旧的「东财接口限流」归因已从个股明细空态移除',
       on.indexOf('常见原因：①东财接口限流') < 0);
     chk('★ [F7] 降级路径记入自检流水（logOp 资金流·个股明细为空）',

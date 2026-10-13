@@ -145,7 +145,7 @@ setTimeout(function () {
     return w.flowOpenSheet('BK1031').then(function () {
       const txt = String((w.document.getElementById('flowShStocks') || {}).textContent || '');
       const dt2 = Date.now() - t2;
-      ok(/没有取到|没有覆盖|不可达|云端存档还没有/.test(txt),
+      ok(/没有取到|没有覆盖|不可达|都取不到|云端存档还没有/.test(txt),
         '无数据时给诚实说明文案（非静默、非无限转圈）', JSON.stringify(txt.slice(0, 70)));
       ok(!/正在读取/.test(txt), '无数据时不停留在「正在读取…」', JSON.stringify(txt.slice(0, 40)));
       ok(/不受影响/.test(txt), '文案明确告知「板块级数字不受影响」（不误导）');

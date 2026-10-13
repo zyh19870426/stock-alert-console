@@ -9929,7 +9929,11 @@ function flowAutoKick(){
 /* 页面可见性变化 → 重新起停轮询（回到前台立刻补一次） */
 document.addEventListener('visibilitychange', function(){
   if(document.hidden){ flowAutoStop(); briefAutoStop(); return }
-  if(flowPageOpen() && FLOW.at && Date.now() - FLOW.at > 60000){ try{ flowLoad(false, true) }catch(e){} }
+  if(flowPageOpen() && FLOW.at && Date.now() - FLOW.at > 60000){
+    /* ★ 2026-10-13：延后 1.5s —— 回前台瞬间用户往往正要点第一下，立刻重载会整体替换两栏 DOM、
+       把这次点击吞掉（手机上「点板块弹窗完全不出来」的主因之一）。延后 + 触摸保护双保险。 */
+    setTimeout(function(){ if(!document.hidden && flowPageOpen()){ try{ flowLoad(false, true) }catch(e){} } }, 1500)
+  }
   /* ★ 2026-10-13：回到前台若首页可见且简报已过期 → 立刻补一次 */
   if(briefHomeVisible() && (!FLOW_BRIEF.at || Date.now() - FLOW_BRIEF.at > 60000)){ try{ flowBriefEnsure(true) }catch(e){} }
   flowAutoKick(); briefAutoKick()
@@ -10346,6 +10350,16 @@ function flowRender(){
   var outs = flowRank2(outs0, function(b){ return -flowMag(b) }, function(b){ return -(b.streak || 0) })
   var hIn = ins.length ? flowSection('净流入 TOP10', ins, 'fin') : '<div class="flow-empty" style="padding:14px 0;">当前无净流入板块</div>'
   var hOut = outs.length ? flowSection('净流出 TOP10', outs, 'fout') : '<div class="flow-empty" style="padding:14px 0;">当前无净流出板块</div>'
+  /* ★ 2026-10-13 修（手机用户报「点板块弹窗完全不出来」）：自动刷新 / 回到前台 / 东财增量补渲
+   * 每次都**整体替换** flowIn/flowOut 的 DOM —— 手机上锁屏、切微信再回来的瞬间往往正要点板块，
+   * 触摸目标被整个换掉 ⇒ 这次点击被浏览器吞掉 ⇒ 「点了没反应、弹窗不出来」。
+   * 而自动刷新产出的内容常常一字不变 ⇒ 与上次产物完全相同（且列表确实在屏上、不是空态/占位）
+   * 时**不动 DOM**，只在确实有变化时才重建。 */
+  if(FLOW._lastIn === hIn && FLOW._lastOut === hOut && $('flowIn').querySelector('.flow-rk')){
+    flowPaintZtBar(coreN, (hIn + hOut).split('★核心').length - 1)
+    return
+  }
+  FLOW._lastIn = hIn; FLOW._lastOut = hOut
   $('flowIn').innerHTML = hIn
   $('flowOut').innerHTML = hOut
   /* 顶部小结放到最后画：把「全市场共振数」与「榜单里标出的数」一起说清（展开/收起会重渲，两者同步） */
@@ -10373,6 +10387,12 @@ function flowOpenByBk(bk){
   try{ logOp('资金流·点击板块未命中', { bk:bk, n:(FLOW.boards||[]).length }) }catch(e){}
   return false
 }
+/* ★ 触摸保护（2026-10-13）：手指落在两栏上的 1.4s 内，后台补渲一律让路 ——
+ * 否则「按下→抬起」之间 DOM 被整体替换，这次点击就被浏览器吞掉（表现为点了没反应）。
+ * flowMarkTap 必须是**模块级同一引用**：addEventListener 靠引用去重，flowBindClicks 每次重渲
+ * 都会重挂，箭头函数/内联函数会越挂越多。 */
+function flowMarkTap(){ FLOW.tapUntil = Date.now() + 1400 }
+function flowTapBusy(){ return Date.now() < (FLOW.tapUntil || 0) }
 function flowBindClicks(){
   var handler = function(ev){
     if(!ev.target || !ev.target.closest) return
@@ -10384,6 +10404,11 @@ function flowBindClicks(){
     var t = ev.target.closest('[data-bk]')
     if(t){ flowOpenByBk(t.getAttribute('data-bk')); return }
   }
+  /* passive 只读不打断滚动；pointerdown 覆盖 鼠标/触摸/笔 三种指针 */
+  $('flowIn').addEventListener('touchstart', flowMarkTap, {passive:true})
+  $('flowOut').addEventListener('touchstart', flowMarkTap, {passive:true})
+  $('flowIn').addEventListener('pointerdown', flowMarkTap, {passive:true})
+  $('flowOut').addEventListener('pointerdown', flowMarkTap, {passive:true})
   $('flowIn').onclick = handler
   $('flowOut').onclick = handler
 }
@@ -10442,6 +10467,11 @@ var flowDemoStocks = function(bk){
  *   东财在预算内返回就仍然用它（标 live），优先级不变。 */
 var STK_COOL_MS = 10 * 60 * 1000
 var STK_EM_BUDGET_MS = 1500
+/* ★ 2026-10-13：弹窗明细的**云端腿**也套硬预算。单源超时 FLOW_SRC_TIMEOUT_MS=20s 是留给
+ * 首屏「权威源 vs CDN」竞速的（先到先渲染，不怕慢）；弹窗是用户**正在等**的交互，
+ * 绝不能陪它等 20s ⇒ 4s 预算，到点退回内存里已有的存档（FLOW.cloudRaw，首屏多半已拉到）。
+ * 最坏 1.5s(东财) + 4s(云端) = 5.5s 内必有结果。 */
+var FLOW_STK_CLOUD_MS = 4000
 /* ★ 2026-10-10 补丁2（用户第二次报「点击还是没反应」）：上轮只给**弹窗内**的个股明细加了预算，
  *   页面级 flowLoad 仍然是 `await Promise.all([云端, flowRetry(flowFetchToday, 2)])`。
  *   实测：emGet 单次 = 20469ms（4 域名 fetch ×10s 全超时 + 2 域名 JSONP 各 10s），
@@ -10488,13 +10518,17 @@ var flowFetchStocks = async function(bk, cloudP){
       logOp('资金流·个股明细东财失败', { bk:bk, msg:String((e && e.message) || e).slice(0,90), coolMin:10 })
     }
   }
-  var cloud = await cloudP2
+  /* ★ 2026-10-13：云端腿套 4s 硬预算；预算内没到 → 退回内存已有存档；两者皆无 → 如实标记
+     cloudfail（取数失败），与「存档没有覆盖该板块」(miss) 严格分开，文案不再归因错误。 */
+  var cloud = null, cloudFail = false
+  try{ cloud = await flowWithBudget(cloudP2, FLOW_STK_CLOUD_MS, '云端存档') }
+  catch(e){ cloud = FLOW.cloudRaw || null; cloudFail = !cloud }
   if(cloud && cloud.stk){
     var hit = flowStkFromCloud(cloud, bk)
     if(hit) return hit
     return { rows: [], src: 'miss', d: cloud.stk.d || '' }
   }
-  return { rows: [], src: 'nostk', d: '' }
+  return { rows: [], src: cloudFail ? 'cloudfail' : 'nostk', d: (cloud && cloud.stk ? (cloud.stk.d || '') : '') }
 }
 /* 板块成分股 ∩ 真实涨停池 = 该板块**精确**涨停家数（概念板块同样成立，不套行业、不估）。
  * 为什么要自算：东财没有板块级「涨停家数」字段（板块 clist 的 f107 实测恒为 5），涨停池只带
@@ -10599,10 +10633,12 @@ var flowOpenSheet = async function(bk){
       /* ★ 2026-10-10：空数据要说清「为什么空」——而且不能再把锅甩给"限流"，
          真实原因是东财对本机出口 IP 级封禁（已改用云端预生成存档绕开）。 */
       logOp('资金流·个股明细为空', { bk:bk, src:st.src, d:st.d })   /* 自检用：走的是哪条降级 */
-      var why = st.src === 'nostk'
-        ? '云端存档还没有「个股明细」段（云端脚本首跑后自动出现，之后每交易日更新）。'
+      /* ★ 2026-10-13：文案按真实原因分流。「取数失败」(cloudfail/nostk) 与「存档没覆盖」(miss)
+         是两回事 —— 旧文案把失败说成「存档还没有」，会误导用户以为数据缺位（实际只是通道慢）。 */
+      var why = (st.src === 'nostk' || st.src === 'cloudfail')
+        ? '此刻云端存档和东财实时都取不到（多为你当前网络到 GitHub 的通道慢或被墙）。榜上的板块资金数据不受影响，稍等几秒再点一次通常就能出来。'
         : (st.src === 'miss'
-          ? '云端存档没有覆盖这个板块（只存页面在榜的 524 个行业/概念板块；新板块、指数/风格类板块不在内）。'
+          ? '云端存档没有覆盖这个板块（只存存档覆盖范围内的行业/概念板块；新板块、指数/风格类板块不在内）。'
           : '东财实时接口不可达。')
       $('flowShStocks').innerHTML = '<div class="sr"><span class="nm" style="color:#8a8f96;white-space:normal;line-height:1.7;">本次没有取到个股资金明细。<br>' +
         esc(why) + '<br>' +
@@ -11165,11 +11201,22 @@ async function flowLoad(force, silent){
         if(cooling && !tmap) stampTxt += ' · 东财冷却中（' + Math.ceil(Math.max(0, FLOW.coolUntil - Date.now()) / 60000) + ' 分钟后自动重试）'
         /* ★ 2026-10-13：追加「存档 <口径日> · 刷新 <本地时刻>」 */
         $('flowStamp').textContent = stampTxt + flowFreshSuffix()
+        /* ★ 触摸保护：这是**后台补渲**（首屏已画过，st.painted 已真）而用户手指正落在两栏上
+           → 这次不画。数据已写进 FLOW.boards，下一次自动刷新 / 手动刷新自然带上；
+           绝不能为了后台数据打断一次进行中的点击（那会吞掉点击 = 「弹窗不出来」）。 */
+        if(st.painted && flowTapBusy()) return
         flowRender(); flowBindClicks()
         st.painted = true
         /* 涨停结构（1 个 JSONP 请求，非阻塞）：首屏不等它，到了再重渲一次补上标签。
-         * 失败也不影响资金数据（降级为「涨停结构暂不可用」）。 */
-        if(!ZT.pool && !st.ztHooked){ st.ztHooked = true; ztLoad().then(function(){ flowRender(); flowBindClicks() }, function(){}) }
+         * 失败也不影响资金数据（降级为「涨停结构暂不可用」）。
+         * ★ 重渲同样受触摸保护：正被点时推迟 1.6s 再画（标签晚几秒无所谓）。 */
+        if(!ZT.pool && !st.ztHooked){
+          st.ztHooked = true
+          ztLoad().then(function(){
+            if(flowTapBusy()){ setTimeout(function(){ try{ flowRender(); flowBindClicks() }catch(e2){} }, 1600) }
+            else { flowRender(); flowBindClicks() }
+          }, function(){})
+        }
         try{
           var hh = new Date()
           localStorage.setItem(cacheKey, JSON.stringify({ at:('0'+hh.getHours()).slice(-2)+':'+('0'+hh.getMinutes()).slice(-2), asof:asof, boards:boards }))
