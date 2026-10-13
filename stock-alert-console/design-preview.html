@@ -10764,8 +10764,9 @@ async function flowFillHistories(boards){
  * ⚠️ 数据链路的固有节奏不变：当日存档由 flow.yml（北京 16:10）产出；
  *    盘中/收盘后的即时值仍由页面叠加东财实时增量。 */
 var FLOW_CACHE_MS = 3 * 60 * 1000
-/* 单源硬超时：API 实测可抖到 13.7s，给足 12s；到点即作废，绝不拖累首屏 */
-var FLOW_SRC_TIMEOUT_MS = 12000
+/* 单源硬超时：API 实测可抖到 13.7s（旧值 12s 会把慢但可用的权威源误杀，只剩 CDN 旧档）；
+ * 调大到 20s 让权威源有机会胜出。首屏由先到者渲染，故不拖累首屏。 */
+var FLOW_SRC_TIMEOUT_MS = 20000
 /* 本地时钟 'HH:MM'（刷新时间显示用） */
 function flowClock(){
   var d = new Date()

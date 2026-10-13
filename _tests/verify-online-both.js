@@ -7,7 +7,7 @@
  */
 const https = require("https");
 
-const HOST = "stock-alert-console.app.workbuddy.host";
+const HOST = "stock-alert-console-51356.app.workbuddy.host";
 const T = Date.now();
 
 function get(pathname) {
