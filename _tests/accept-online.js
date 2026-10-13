@@ -1104,7 +1104,9 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
     chk('★ [F7] 明说是收盘口径', on.indexOf('非盘中实时') >= 0);
     chk('★ [F7] 来源行样式 .flow-stocks .src 已上线', /\.flow-stocks \.src\{/.test(on));
     chk('★ [F7] 空态按真实原因分流（cloudfail=取数失败 ≠ miss=存档没覆盖）',
-      on.indexOf('此刻云端存档和东财实时都取不到') >= 0 && /src:\s*'cloudfail'/.test(onNoCmt));
+      /* ⚠️ 实现是三目 `src: cloudFail ? 'cloudfail' : 'nostk'`，
+         别写成 /src:\s*'cloudfail'/（字面紧邻引号）—— 那只在「已确定失败」的旧写法下才成立（2026-10-13 踩）。 */
+      on.indexOf('此刻云端存档和东财实时都取不到') >= 0 && /src:\s*cloudFail\s*\?\s*'cloudfail'/.test(onNoCmt));
     chk('★ [F7] 旧的「东财接口限流」归因已从个股明细空态移除',
       on.indexOf('常见原因：①东财接口限流') < 0);
     chk('★ [F7] 降级路径记入自检流水（logOp 资金流·个股明细为空）',
@@ -1151,11 +1153,13 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
       (function () {
         const fn = between(onNoCmt, 'var flowFetchStocks = async function', 'var FLOW_ZTMAP = {}');
         /* ★ 2026-10-10：变量名由 cloudP 改为 cloudP2（cloudP 成了可选入参），
-           判据从「字面 var cloudP = flowCloudRaw()」改为「段内首次 flowCloudRaw()」+
-           「await cloudP2」。顺序要求一条不少：预取 → 东财 → await 兜底。 */
+           判据从「字面 var cloudP = flowCloudRaw()」改为「段内首次 flowCloudRaw()」。
+         * ★ 2026-10-13：存档的**取用**从 `await cloudP2` 改为 `await flowWithBudget(cloudP2, …)` ——
+           给弹窗云端腿套 4s 硬预算（用户报「点了弹窗不出来」时最坏只等一个预算）。
+           判据随之改为「段内出现 flowWithBudget(cloudP2」。顺序要求一条不少：预取 → 东财 → 取用兜底。 */
         const iCp = fn.indexOf('flowCloudRaw()');
         const iP = fn.indexOf('push2.eastmoney.com');
-        const iC = fn.indexOf('await cloudP2');
+        const iC = fn.indexOf('flowWithBudget(cloudP2');
         return fn.length > 200 && iCp >= 0 && iP > iCp && iC > iP;
       })());
     chk('★ [F9] 东财仍按主力净额 f62 降序取前 5（官方口径不变）',
@@ -1194,10 +1198,11 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
     chk('★ [F10] 云端存档并行预取 → 东财 → 再取存档（两段耗时不相加）',
       (function () {
         const fn = between(onNoCmt, 'var flowFetchStocks = async function', 'var FLOW_ZTMAP = {}');
-        /* ★ 2026-10-10：同 [F9] —— 变量改名 cloudP→cloudP2，判据改为首次 flowCloudRaw()。 */
+        /* ★ 2026-10-10：同 [F9] —— 变量改名 cloudP→cloudP2，判据改为首次 flowCloudRaw()。
+         * ★ 2026-10-13：取用改为 flowWithBudget(cloudP2, …)（套 4s 硬预算），判据同步更新。 */
         const iCp = fn.indexOf('flowCloudRaw()');
         const iP = fn.indexOf('push2.eastmoney.com');
-        const iC = fn.indexOf('await cloudP2');
+        const iC = fn.indexOf('flowWithBudget(cloudP2');
         return iCp >= 0 && iP > iCp && iC > iP;
       })());
     /* ★ [F13 补充] 弹窗路径同样必须「并行预取 → 东财 → 兜底」——
