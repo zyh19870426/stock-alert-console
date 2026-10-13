@@ -34,7 +34,11 @@ function get(url, opts = {}) {
   });
 }
 
-const SITE = 'https://stock-alert-console.app.workbuddy.host';
+/* 线上控制台域名。★2026-10-13 换 GitHub 账号迁移后发布链接变为 -51356 子域：
+   原 app（stock-alert-console.app.workbuddy.host）仍在线但**永远指向旧仓 zyhaaad**，
+   已不再是我们发布的那个 app。默认取新链接，可用 SITE_URL 环境变量临时覆盖
+   （例：SITE_URL=https://xxx node _tests/accept-online.js）。 */
+const SITE = process.env.SITE_URL || 'https://stock-alert-console-51356.app.workbuddy.host';
 const REPO = 'zyh19870426/stock-alert';
 const GH = process.env.GH_TOKEN || '';
 
@@ -1261,7 +1265,9 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
      *   holdBoardLine 412 次，微任务队列塞满、定时器被饿死 ⇒ **整页点击失效**。
      *   触发条件很普通：**有持仓**（才走 holdBoardLine）+ 云端 flow-history 取不到。
      *   回归锁：_tests/_cache/flow-firstpaint-check.js（23 项）+ flowbrief-loop-check.js（15 项，含反向锁）。 */
-    const fLoad = between(onNoCmt, 'async function flowLoad(force){', 'function flowOpen(){');
+    /* ★ 2026-10-13：flowLoad 签名扩为 (force, silent) —— silent=自动轮询的静默刷新。
+       切片锚点必须同步更新，否则 between() 取不到区间、下面三条会假红。 */
+    const fLoad = between(onNoCmt, 'async function flowLoad(force, silent){', 'function flowOpen(){');
     chk('★ [F11] 页面级首屏改用东财硬预算常量 2.5s', /var FLOW_EM_BUDGET_MS = 2500/.test(onNoCmt));
     chk('★ [F11] 东财板块清单套上同一个硬预算包装器',
       /flowWithBudget\(flowFetchToday\(FLOW\.mode\), FLOW_EM_BUDGET_MS, '东财板块清单'\)/.test(onNoCmt));
@@ -1269,21 +1275,30 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
       fLoad.length > 400 && fLoad.indexOf('flowRetry') < 0);
     chk('★ [F11] 不再同时等两条腿（`Promise.all([pC, pE])` 就是首屏被拖死的入口）',
       fLoad.indexOf('Promise.all([pC, pE])') < 0 && fLoad.indexOf('var pC =') < 0);
-    chk('★ [F11] 首屏只等云端：`await flowCloudRaw()` → 定义 paint → 调用 paint()', (function () {
+    chk('★ [F11] 首屏只等云端：`await flowCloudRaw(...)` → 定义 paint → 调用 paint()', (function () {
       /* ⚠️ 不能用注释串作锚点：onNoCmt 已经把注释剥掉了（第一版就栽在这，假红 1 条）。
-         只锚代码：云端 await → `var paint = function(){` → `paint()` 调用，三者顺序必须成立。 */
-      const iC = fLoad.indexOf('st.cloud = await flowCloudRaw()');
+         只锚代码：云端 await → `var paint = function(){` → `paint()` 调用，三者顺序必须成立。
+         ★2026-10-13：flowCloudRaw 增加第 2 参（权威源后到的重渲回调），调用签名由
+           `flowCloudRaw()` 变为 `flowCloudRaw(false, function(c){...})` —— 锚点随之更新，
+           实现口径（首屏只等云端、paint 定义在后、调用在后）未变。
+         反向锁：该回调**只在首屏已画过之后**才重画（`if(st.painted)` 守卫），
+           否则一旦权威源先于首屏返回，回调里的 paint() 会命中未初始化的 paint。 */
+      const iC = fLoad.indexOf('st.cloud = await flowCloudRaw(false, function(c){');
       const iDef = fLoad.indexOf('var paint = function(){');
       const iCall = fLoad.indexOf('paint()', iDef + 1);
-      return iC >= 0 && iDef > iC && iCall > iDef;
+      const cbBody = iC >= 0 ? fLoad.slice(iC, iC + 200) : '';
+      const guarded = cbBody.indexOf('if(st.painted){ try{ paint() }') >= 0;
+      return iC >= 0 && iDef > iC && iCall > iDef && guarded;
     })());
     chk('★ [F11] 唯一会等东财的情形被限定死：**只有云端挂了**才 `await emP`（且已带 2.5s 预算）',
       (function () {
-        const iC = fLoad.indexOf('st.cloud = await flowCloudRaw()');
+        const iC = fLoad.indexOf('st.cloud = await flowCloudRaw(false, function(c){');
         const iWait = fLoad.indexOf('if(!st.cloud && !st.emErr && emP){');
         const iAwaitEm = fLoad.indexOf('await emP', iWait);
         const iDef = fLoad.indexOf('var paint = function(){');
-        return iC >= 0 && iWait > iC && iAwaitEm > iWait && iDef > iWait;
+        /* 反向锁：整个 flowLoad 里 `await emP` 只准出现这一次，多一处＝首屏又被拖住 */
+        const emWaits = fLoad.split('await emP').length - 1;
+        return iC >= 0 && iWait > iC && iAwaitEm > iWait && iDef > iWait && emWaits === 1;
       })());
     chk('★ [F11] 东财晚到会补渲一次（预算内到了就带「今日盘中增量」重画）',
       /emP\.then\(function\(\)\{ if\(st\.tmap\)\{ try\{ paint\(\) \}/.test(onNoCmt));
@@ -1294,14 +1309,25 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
     chk('★ [F11] 冷却期跳过东财那条腿（不刺激风控）',
       /var emP = cooling \? null/.test(onNoCmt));
 
-    const fbe = between(onNoCmt, 'var flowBriefEnsure = async function(){', 'function v3Sub(code){');
+    /* ★2026-10-13：签名由 `async function(){` 改为 `async function(force){`（首页简报加 TTL/手动强刷）。
+       ⚠️ 这里用不含签名的锚点 —— 否则签名一改 `between` 静默返回 ''，整段断言**假绿**。 */
+    const fbe = between(onNoCmt, 'var flowBriefEnsure = async function(', 'function v3Sub(code){');
+    chk('★ [F11] flowBriefEnsure 代码段已取到（锚点未失效）', fbe.length > 300);
     chk('★ [F11] 资金简要补数：新增失败退避字段 nextTry / tries',
       /FLOW_BRIEF\.nextTry = 0; FLOW_BRIEF\.tries = 0/.test(onNoCmt) &&
       /if\(FLOW_BRIEF\.err && Date\.now\(\) < FLOW_BRIEF\.nextTry\) return/.test(onNoCmt));
     chk('★ [F11] ★ 失败**绝不重渲**（旧版的自激入口就是「失败后无条件 renderDash」）', (function () {
       const iOk = fbe.indexOf('if(!ok){');
       const iRen = fbe.indexOf('renderDash', Math.max(0, iOk));
-      return iOk >= 0 && iRen > iOk && fbe.slice(iOk, iRen).indexOf('return') > 0;
+      const failSeg = iOk >= 0 ? fbe.slice(iOk, iRen > iOk ? iRen : fbe.length) : '';
+      /* 反向锁：flowBriefEnsure 里 renderDash 只准出现 2 次 ——
+         ① 权威源后到的回调里（首屏已画过才执行）② 成功路径末尾。
+         失败分支里出现第 3 次即意味着死循环入口回来了，必须红。 */
+      const renCount = fbe.split('renderDash').length - 1;
+      return iOk >= 0 && iRen > iOk
+        && failSeg.indexOf('return') > 0
+        && failSeg.indexOf('FLOW_BRIEF.nextTry = Date.now() + wait') > 0
+        && renCount === 2;
     })());
     chk('★ [F11] 退避单调递增且有上限（60s→2m→4m…上限 30 分钟）',
       /Math\.min\(30 \* 60 \* 1000, 60 \* 1000 \* Math\.pow\(2, FLOW_BRIEF\.tries - 1\)\)/.test(onNoCmt));

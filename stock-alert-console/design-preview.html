@@ -3086,7 +3086,7 @@ function stageStatsCard(){
  * 数据：云端每日序列直接算「全市场（行业+概念合并）当月累计」TOP3 流入 / TOP3 流出，
  * 1 个请求（raw/jsDelivr，非东财域），10 分钟进程缓存与资金流页共享。零东财请求。 */
 /* errMsg：失败原因（卡片上如实说明，而不是干巴巴一句「暂不可用」） */
-var FLOW_BRIEF = { loading:false, ins:null, outs:null, asof:'', err:false, errMsg:'', mref:'', stale:false }
+var FLOW_BRIEF = { loading:false, ins:null, outs:null, asof:'', err:false, errMsg:'', mref:'', stale:false, at:0, tries:0, nextTry:0 }
 /* ★ 2026-10-09 修（用户报「首页市场资金简要一直没有数据，停留在 9 月 30 号」）：
  *   根因 = 只按**当前自然月**筛日档。月初（或云端滞更）时当月一条日档都没有
  *   ⇒ 算出空榜 ⇒ 卡片渲染成「两列空白 + 截至 2026-09-30」，看着就是「一直没数据」。
@@ -3164,7 +3164,7 @@ function flowBriefCard(){
       '<div style="flex:1;">' + flowBriefRows(b.ins, 'flow-up') + '</div>' +
       '<div style="flex:1;">' + flowBriefRows(b.outs, 'flow-dn') + '</div>' +
     '</div>' +
-    '<div class="near-meta">' + esc(pfx) + ' · 截至 ' + esc(b.asof) + ' · 点开看资金流全景 ›</div></div>'
+    '<div class="near-meta">' + esc(pfx) + ' · 截至 ' + esc(b.asof) + esc(flowClockSuffix()) + ' · 点开看资金流全景 ›</div></div>'
   return h
 }
 /* ★ 2026-10-10 用户要求：首页持仓股要直接看到「所属板块题材的资金流入流出 / 天数 / 板块阶段」。
@@ -3260,17 +3260,34 @@ function holdBoardLine(code){
  *     ② 失败写**退避窗口**（60s→2m→4m…上限 30 分钟），窗口内 ensure 直接返回，不再打网络。
  *   ⚠️ 这是刹车，不是"优化"：重试策略必须单调收敛，否则任何「渲染↔取数」的互调都是死循环。 */
 FLOW_BRIEF.nextTry = 0; FLOW_BRIEF.tries = 0
-var flowBriefEnsure = async function(){
-  if(FLOW_BRIEF.ins || FLOW_BRIEF.loading) return
+var flowBriefEnsure = async function(force){
+  if(FLOW_BRIEF.loading) return
+  /* ★ 2026-10-13 修（用户要求「首页的简报也要最新」）：
+   *   旧实现是 `if(FLOW_BRIEF.ins || FLOW_BRIEF.loading) return` —— 加载时拉到一次就**永不再更新**，
+   *   用户停在首页不动，看到的永远是进页面那一刻的简报（与「最新」直接冲突）。
+   *   现加 TTL：过期即可重拉，由 briefAutoKick() 定时驱动（首页可见时才跑）。
+   *   TTL 取 FLOW_CACHE_MS 以保持单一真源（该变量在文件后段赋值，故此处**运行时**读取）。 */
+  var ttl = (typeof FLOW_CACHE_MS === 'number' && FLOW_CACHE_MS > 0) ? FLOW_CACHE_MS : 3 * 60 * 1000
+  if(!force && FLOW_BRIEF.ins && FLOW_BRIEF.at && Date.now() - FLOW_BRIEF.at < ttl) return
   if(FLOW_BRIEF.err && Date.now() < FLOW_BRIEF.nextTry) return
   FLOW_BRIEF.loading = true
   var ok = false
   try{
-    var cloud = await flowCloudRaw()
+    /* ★ 2026-10-13：回调 = 权威源后到且内容更新时，刷新简报并重渲首页。
+       不会递归：FLOW_BRIEF.at 刚更新 + loading/TTL 双重闸门会挡住重入。 */
+    var cloud = await flowCloudRaw(false, function(c){
+      try{
+        var r2 = flowBriefFromCloud(c)
+        FLOW_BRIEF.ins = r2.ins; FLOW_BRIEF.outs = r2.outs; FLOW_BRIEF.asof = r2.asof
+        FLOW_BRIEF.mref = r2.mref; FLOW_BRIEF.stale = r2.stale; FLOW_BRIEF.at = Date.now()
+        renderDash(G.quoteMap || {})
+      }catch(e){}
+    })
     var r = flowBriefFromCloud(cloud)
     FLOW_BRIEF.ins = r.ins; FLOW_BRIEF.outs = r.outs; FLOW_BRIEF.asof = r.asof
     FLOW_BRIEF.mref = r.mref; FLOW_BRIEF.stale = r.stale
     FLOW_BRIEF.err = false; FLOW_BRIEF.errMsg = ''; FLOW_BRIEF.tries = 0
+    FLOW_BRIEF.at = Date.now()
     ok = true
   }catch(e){
     FLOW_BRIEF.err = true; FLOW_BRIEF.errMsg = String(e && e.message || e)
@@ -3285,6 +3302,34 @@ var flowBriefEnsure = async function(){
     return   /* ★ 失败不重渲（这就是旧版的死循环入口） */
   }
   try{ renderDash(G.quoteMap || {}) }catch(e2){}   /* 数据到了重渲首页（paint 幂等，不打断点击） */
+}
+
+/* ---- 首页「市场资金 · 简要」自动刷新（★ 2026-10-13 新增，用户要求「首页的简报也要最新」）----
+ * 只在**首页可见**且**标签页在前台**时轮询；切走即停（省流量、避开上游风控）。
+ * 节奏与资金流页一致：盘中 FLOW_AUTO_MS（3 分钟）、非交易时段 10 分钟。
+ * ⚠️ 定时器只在「未启动」时启动（开头的 if(briefAutoTimer) return）——
+ *    否则 renderDash 每次重渲都会重设定时器，高频重渲下定时器被无限推迟、**永不触发**。 */
+var briefAutoTimer = null
+function briefHomeVisible(){
+  var d = $('dash')
+  if(!d) return false
+  if(typeof G !== 'undefined' && G.homeMode === 'list') return false
+  return d.style.display !== 'none'
+}
+function briefAutoStop(){
+  if(briefAutoTimer){ clearTimeout(briefAutoTimer); briefAutoTimer = null }
+}
+function briefAutoKick(){
+  if(briefAutoTimer) return
+  if(typeof document === 'undefined' || document.hidden) return
+  if(!briefHomeVisible()) return
+  var gap = (typeof FLOW_AUTO_MS === 'number' && FLOW_AUTO_MS > 0 && flowInTradingHours()) ? FLOW_AUTO_MS : 10 * 60 * 1000
+  briefAutoTimer = setTimeout(function(){
+    briefAutoTimer = null
+    if(document.hidden || !briefHomeVisible()) return
+    try{ flowBriefEnsure(true) }catch(e){}
+    briefAutoKick()
+  }, gap)
 }
 
 /* 副标题：三源到底说了什么（取代原来干巴巴的「2/3 源一致」） */
@@ -5356,6 +5401,8 @@ function renderHome(){
   if(dash) dash.style.display = isDash ? '' : 'none'
   if(back) back.hidden = isDash ? true : false
   if(list) list.style.display = isDash ? 'none' : ''
+  /* ★ 2026-10-13：切回首页时把「市场资金·简要」的刷新轮询拉起来（离开首页后它会在下一拍自行退出） */
+  try{ briefAutoKick() }catch(e){}
 }
 function openFullList(){
   G.homeMode = 'list'
@@ -9842,7 +9889,60 @@ function ztStockOf(code){ return (ZT.byCode && ZT.byCode[String(code)]) || null 
  * 两个维度：①当月累计主力净流入（每月 1 号自然重置——只累加当月日期）②连续流入天数（月内连续计数）。
  * 圆球：面积∝|累计净流入|，红=流入 绿=流出，光晕强度=连续天数。
  * 全部走 emGet 降级链；日线按 4 并发拉取；当日结果按天缓存 localStorage。 */
-var FLOW = { mode:'concept', loading:false, loadedDate:'', loadedMode:'', boards:[], hist:{}, coolUntil:0, fillToken:0, cloudRaw:null, cloudAt:0, showAll:{ fin:false, fout:false } }
+/* ★ 2026-10-13 新增字段（刷新时间显示 + 取数竞速）：
+ *   cloudSrc/cloudUp/cloudLocal —— 本次云端存档的「胜出源 / 存档口径日 / 本地拉到时刻」，
+ *     供资金流页与首页简报如实标注数据新鲜度（用户要求：把最新刷新时间显示出来）。
+ *   cloudP/cloudWatchers —— 并发去重与「权威源后到、内容更新」时的重渲回调表。 */
+var FLOW = { mode:'concept', loading:false, loadedDate:'', loadedMode:'', boards:[], hist:{}, coolUntil:0, fillToken:0, cloudRaw:null, cloudAt:0, at:0, showAll:{ fin:false, fout:false }, cloudSrc:'', cloudUp:'', cloudLocal:'', cloudP:null, cloudWatchers:[] }
+
+/* ---------- 资金流页自动刷新（★ 2026-10-13 新增，用户报「线上资金流入流出不是最新」）----------
+ * 背景：这个页面原来**只有手动「刷新」按钮**，没有任何定时器 —— 用户停在页面上不动，
+ *   数字就永远不动，连盘中「今日增量」也不跟随（恐贪指数页早就有 30 秒轮询，此处漏了）。
+ *   叠加迁移导致 flow-daily 从未在新仓跑过，用户看到的就是「停在旧数据」。
+ * 口径（与页面数据模型一致，不新增请求类型）：
+ *   · 盘中每隔 FLOW_AUTO_MS 重跑 flowLoad(false, true)：云端存档走进程内缓存（省请求），
+ *     东财当日实时值每次重拉 ⇒ 盘中「今日增量」跟得上。
+ *   · 只在**本页可见**且**标签页在前台**时轮询；切走即停（省流量、避开东财风控）。
+ *   · 非交易时段放宽到 FLOW_AUTO_IDLE_MS，仅用于等当日收盘存档落库。
+ *   · 60 秒防抖：刚手动刷过就不重刷。
+ * ⚠️ 与 flow.yml 的 cron（北京 16:10）配合：盘中靠东财实时值，收盘后靠云端存档。 */
+var FLOW_AUTO_MS = 3 * 60 * 1000        /* 盘中：3 分钟 */
+var FLOW_AUTO_IDLE_MS = 10 * 60 * 1000  /* 非交易时段：10 分钟 */
+var flowAutoTimer = null
+function flowInTradingHours(){
+  var d = new Date(), wd = d.getDay()
+  if(wd === 0 || wd === 6) return false
+  var m = d.getHours() * 60 + d.getMinutes()
+  return (m >= 570 && m <= 690) || (m >= 780 && m <= 900)   /* 9:30-11:30 / 13:00-15:00 */
+}
+function flowPageOpen(){
+  var p = $('pgFlow')
+  return !!(p && p.classList.contains('on'))
+}
+function flowAutoStop(){
+  if(flowAutoTimer){ clearTimeout(flowAutoTimer); flowAutoTimer = null }
+}
+function flowAutoKick(){
+  flowAutoStop()
+  if(typeof document === 'undefined' || document.hidden) return
+  if(!flowPageOpen() || typeof DEMO !== 'undefined' && DEMO) return
+  var gap = flowInTradingHours() ? FLOW_AUTO_MS : FLOW_AUTO_IDLE_MS
+  flowAutoTimer = setTimeout(async function(){
+    flowAutoTimer = null
+    if(!flowPageOpen() || document.hidden) return flowAutoKick()
+    if(FLOW.at && Date.now() - FLOW.at < 60000) return flowAutoKick()   /* 防抖 */
+    try{ await flowLoad(false, true) }catch(e){}
+    flowAutoKick()
+  }, gap)
+}
+/* 页面可见性变化 → 重新起停轮询（回到前台立刻补一次） */
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden){ flowAutoStop(); briefAutoStop(); return }
+  if(flowPageOpen() && FLOW.at && Date.now() - FLOW.at > 60000){ try{ flowLoad(false, true) }catch(e){} }
+  /* ★ 2026-10-13：回到前台若首页可见且简报已过期 → 立刻补一次 */
+  if(briefHomeVisible() && (!FLOW_BRIEF.at || Date.now() - FLOW_BRIEF.at > 60000)){ try{ flowBriefEnsure(true) }catch(e){} }
+  flowAutoKick(); briefAutoKick()
+})
 function flowFmtYi(v){
   if(!isFinite(v)) return '—'
   return (v >= 0 ? '+' : '') + (v / 1e8).toFixed(1) + '亿'
@@ -10652,24 +10752,143 @@ async function flowFillHistories(boards){
   flowHistPersist()
   flowRender(); flowBindClicks()
 }
-/* 云端存档（raw/jsDelivr，非东财域，1 请求）：进程内缓存 10 分钟
- * ★ 2026-09-30 改版：云端序列成为资金流页的主数据源——板块集合与「当月累计/连续天数」
- *   全部由每日序列直接计算（用户原话「抓的不是当日的 TOP，是当月累计的 TOP」），
- *   东财 clist 只能按当日排序，永远抓不到当月累计 TOP（电池当日流出第 69 名、当月累计 TOP10）。 */
-var flowCloudRaw = async function(force){
-  var now = Date.now()
-  if(!force && FLOW.cloudRaw && FLOW.cloudAt && now - FLOW.cloudAt < 10 * 60 * 1000) return FLOW.cloudRaw
-  var urls = [
-    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
-  ]
-  var j = null
-  for(var u=0;u<urls.length && !j;u++){
-    try{ var r = await fetch(urls[u]); if(r.ok) j = await r.json() }catch(e){}
+/* 云端存档：**权威源优先 · 兜底源不抢跑**，进程内缓存 FLOW_CACHE_MS（默认 3 分钟）。
+ * ★ 2026-10-13 二次修（用户报「线上资金流入流出不是最新」）—— 实测数据驱动，根因如下：
+ *   上一版做成「三源纯竞速，谁先到用谁」，实测立刻暴露致命缺陷（三个源同时发，各测一次）：
+ *     · cdn.jsdelivr.net（有 CDN 缓存）      **588 ms**  → updated=2026-10-12（Age=11508s，即 3.2 小时前）
+ *     · api.github.com（无 CDN，内容最新）   **9673 ms** → updated=2026-10-13（6 个日档）
+ *     · raw.githubusercontent.com            10.6 s    → 失败（本机恒不可达；线上也可能被拦）
+ *   ⇒ 快 16 倍的 jsDelivr **必然获胜**，页面于是永远停在 3 小时前的旧存档上 —— 这就是用户看到的
+ *     「数据不是最新」。且 jsDelivr 的 CDN 缓存**破不掉**：URL 上加 `?t=` 无效，
+ *     实测它仍是命中缓存返回（Age=11508 即证据）。
+ *   ⇒ 现口径把源分两类：
+ *       · 权威源 = API / raw（无 CDN，内容最新，但慢且会抖）
+ *       · 兜底源 = jsDelivr（快，但可能带数小时 CDN 缓存）
+ *     **谁先到先用谁把首屏画出来**（保速度：jsDelivr 588ms 就能出画面），
+ *     但若先到的是兜底源，则**继续在后台等权威源**；权威源到达且内容更新
+ *     （updated 更晚 / 日档更多）→ 经 cloudWatchers 回调触发一次重渲覆盖。
+ *     ⇒ 速度与新鲜度兼得，**绝不因为某个源快就停在它的旧数据上**。
+ *   · 并发去重：首页简报与资金流页常同时触发，共享同一次请求（FLOW.cloudP）。
+ *   · 新鲜度判别：覆盖阶段只接受「比当前版本更新」的内容，杜绝数据倒退。
+ * ⚠️ 数据链路的固有节奏不变：当日存档由 flow.yml（北京 16:10）产出；
+ *    盘中/收盘后的即时值仍由页面叠加东财实时增量。 */
+var FLOW_CACHE_MS = 3 * 60 * 1000
+/* 单源硬超时：API 实测可抖到 13.7s，给足 12s；到点即作废，绝不拖累首屏 */
+var FLOW_SRC_TIMEOUT_MS = 12000
+/* 本地时钟 'HH:MM'（刷新时间显示用） */
+function flowClock(){
+  var d = new Date()
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
+}
+/* a 是否比 b 更新（b 为 null 视为最旧）。口径日优先、日档条数次之。 */
+function flowIsNewer(a, b){
+  if(!a) return false
+  if(!b) return true
+  var ua = String(a.updated || ''), ub = String(b.updated || '')
+  if(ua !== ub) return ua > ub
+  return (a.days || []).length > (b.days || []).length
+}
+/* ---- 数据新鲜度标注（★ 2026-10-13 用户要求：把最新刷新时间显示出来）----
+ * 两层含义不同，**缺一不可**：
+ *   · 存档 = 数据自身的口径日（来自存档 updated 字段，权威，不受本机时钟影响）
+ *   · 刷新 = 本次实际从云端拉到数据的时刻（本机时钟）
+ * 只写刷新时刻会误导 —— 走了 jsDelivr 兜底时「拉到的是新时刻、数据却是旧的」；
+ * 只写存档日又看不出是几点拉的。两个一起看才不会误判。 */
+function flowFreshSuffix(){        /* ' · 存档 10-13 · 刷新 15:58'；无数据时返回 '' */
+  var u = FLOW.cloudUp ? FLOW.cloudUp.slice(5) : ''
+  var t = FLOW.cloudLocal || ''
+  if(!u && !t) return ''
+  var s = u ? '存档 ' + u : ''
+  if(t) s += (s ? ' · ' : '') + '刷新 ' + t
+  return ' · ' + s
+}
+function flowClockSuffix(){        /* ' · 刷新 15:58'；用于已有「截至 <存档日>」的场合，避免重复 */
+  return FLOW.cloudLocal ? ' · 刷新 ' + FLOW.cloudLocal : ''
+}
+/* 从任意一种响应体里抽出 flow-history 对象：兼容 ①GitHub API 的 base64 包装 ②直出 JSON */
+function flowExtract(j){
+  if(!j) return null
+  if(j.content && !j.days){
+    try{ j = JSON.parse(b64ToUtf8(String(j.content).replace(/\s/g,''))) }catch(e){ return null }
   }
-  if(!j || !j.days || !j.days.length) throw new Error('云端存档不可用')
-  FLOW.cloudRaw = j; FLOW.cloudAt = now
-  return j
+  return (j && j.days && j.days.length) ? j : null
+}
+/* 单源取数：成功 → flow-history 对象；失败 → reject（由竞速层裁决） */
+function flowFetchOne(url){
+  return fngFetch(url, {}, FLOW_SRC_TIMEOUT_MS).then(function(r){
+    if(!r || !r.ok) throw new Error('HTTP ' + (r && r.status))
+    return r.json()
+  }).then(function(o){
+    var got = flowExtract(o)
+    if(!got) throw new Error('云端存档格式异常')
+    return got
+  })
+}
+var flowCloudRaw = function(force, onBetter){
+  var now = Date.now()
+  if(!force && FLOW.cloudRaw && FLOW.cloudAt && now - FLOW.cloudAt < FLOW_CACHE_MS) return Promise.resolve(FLOW.cloudRaw)
+  if(FLOW.cloudP){   /* 并发去重：把回调挂到同一次请求上 */
+    if(typeof onBetter === 'function') FLOW.cloudWatchers.push(onBetter)
+    return FLOW.cloudP
+  }
+  FLOW.cloudWatchers = (typeof onBetter === 'function') ? [onBetter] : []
+  var t = '?t=' + Date.now()
+  var AUTH = [
+    'https://api.github.com/repos/zyh19870426/stock-alert/contents/flow-history.json' + t,
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json' + t
+  ]
+  var JSD = 'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json' + t
+  /* 权威源：任一成功即胜（两个都在跑，谁快用谁）；全失败 → reject */
+  var authP = new Promise(function(res, rej){
+    var left = AUTH.length, done = false
+    AUTH.forEach(function(u){
+      flowFetchOne(u).then(function(j){
+        if(done) return
+        done = true; res({ src:'auth', j:j })
+      }, function(){
+        if(done || --left > 0) return
+        done = true; rej(new Error('权威源不可用'))
+      })
+    })
+  })
+  var jsdP = flowFetchOne(JSD).then(function(j){ return { src:'cdn', j:j } })
+  /* 落库 + 记录数据新鲜度三要素（胜出源 / 存档口径日 / 本地拉到时刻） */
+  function adopt(pick, notify){
+    FLOW.cloudRaw = pick.j; FLOW.cloudAt = Date.now()
+    FLOW.cloudSrc = pick.src
+    FLOW.cloudUp = String(pick.j.updated || '')
+    FLOW.cloudLocal = flowClock()
+    if(notify && FLOW.cloudWatchers.length){
+      FLOW.cloudWatchers.slice().forEach(function(f){ try{ f(pick.j) }catch(e){} })
+    }
+  }
+  var p = new Promise(function(resolve, reject){
+    var delivered = false
+    Promise.race([authP, jsdP]).then(function(first){
+      adopt(first, false)
+      delivered = true
+      resolve(first.j)
+      /* 兜底源抢跑成功 → 后台继续等权威源；更新的内容到达即覆盖并回调重渲 */
+      if(first.src === 'cdn'){
+        authP.then(function(a){
+          if(flowIsNewer(a.j, FLOW.cloudRaw)) adopt(a, true)
+        }, function(){})
+      }
+    }, function(){
+      if(!delivered) reject(new Error('云端存档不可用'))
+    })
+  })
+  FLOW.cloudP = p
+  /* 释放「并发去重锁」的时机很关键：
+   *   · 首屏由**权威源**交付 → 立即释放（本轮已拿到最新内容，没有后续覆盖）。
+   *   · 首屏由**兜底源**（jsDelivr）交付 → 必须**等权威源出结论**（覆盖完成或超时）再释放。
+   *     否则下一轮请求会把 FLOW.cloudWatchers 重置掉，而权威源还在路上 ——
+   *     「权威源后到 → 重渲」的回调就此丢失，页面会一直停在 CDN 旧数据上（静默失效）。 */
+  p.then(function(){
+    if(FLOW.cloudSrc === 'cdn') setTimeout(function(){ FLOW.cloudP = null }, FLOW_SRC_TIMEOUT_MS + 300)
+    else FLOW.cloudP = null
+  }, function(){ FLOW.cloudP = null })
+  return p
 }
 /* 主算：mode 板块集合 × 云端每日序列 → 当月累计 cum + 月内连续天数 streak。
  * todayMap：实时当日值 {bk:{name,price,chg,today}}（东财可达时补今日盘中增量），null=纯云端档。
@@ -10856,7 +11075,7 @@ function flowAssembleBoards(mode, tmap, cloud){
   if(!boards.length) throw new Error('板块清单为空')
   return boards
 }
-async function flowLoad(force){
+async function flowLoad(force, silent){
   if(FLOW.loading) return
   FLOW.hist = flowHistLoad()   /* 每次进入都重读本地历史（模式切换后 key 不同） */
   /* 东财冷却期：全通道失败后 5 分钟内不再打东财，避免刺激风控 */
@@ -10869,11 +11088,13 @@ async function flowLoad(force){
       if(raw){ var c = JSON.parse(raw); if(c && c.boards && c.boards.length) snap = c }
     }catch(e){}
   }
-  /* 已有当日板块清单（缓存或内存）→ 直接渲染（cum/streak 已算好，无需再补历史） */
-  if(!force && FLOW.loadedMode === FLOW.mode && FLOW.boards.length){
+  /* 已有当日板块清单（缓存或内存）→ 直接渲染（cum/streak 已算好，无需再补历史）
+   * ★ 2026-10-13：silent（自动轮询）**不走这条短路**，否则轮询会永远命中内存缓存、
+   *   等于没刷新 —— 自动轮询必须真的重新拉云端与东财。 */
+  if(!force && !silent && FLOW.loadedMode === FLOW.mode && FLOW.boards.length){
     flowRender(); flowBindClicks(); return
   }
-  if(snap && !force){
+  if(snap && !force && !silent){
     FLOW.boards = snap.boards; FLOW.loadedMode = FLOW.mode
     $('flowStamp').textContent = (snap.asof || '') + ' · 快照 ' + (snap.at || '') + (cooling ? ' · 东财冷却中' : '')
     flowRender(); flowBindClicks()
@@ -10884,7 +11105,10 @@ async function flowLoad(force){
    *   并在口径行注明「东财冷却中（N 分钟后自动重试）」。 */
   FLOW.loading = true
   var btn = $('flowRefreshBtn'); if(btn) btn.disabled = true
-  $('flowIn').innerHTML = '<div class="flow-empty" id="flowEmpty">正在拉取板块资金流…</div>'
+  /* ★ 2026-10-13：silent 时不把已有内容换成一屏「正在拉取…」（会打断正在看的用户），
+   *   只在口径行加一个轻量标记，拉完自然覆盖。 */
+  if(!silent) $('flowIn').innerHTML = '<div class="flow-empty" id="flowEmpty">正在拉取板块资金流…</div>'
+  else { try{ var st0 = $('flowStamp'); if(st0 && st0.textContent.indexOf('更新中') < 0) st0.textContent = st0.textContent + ' · 更新中…' }catch(e){} }
   try{
     if(DEMO){
       FLOW.boards = flowDemoBoards(FLOW.mode); FLOW.loadedMode = FLOW.mode; flowDemoZT()
@@ -10899,7 +11123,13 @@ async function flowLoad(force){
       var emP = cooling ? null
         : flowWithBudget(flowFetchToday(FLOW.mode), FLOW_EM_BUDGET_MS, '东财板块清单')
       if(emP) emP.then(function(m){ st.tmap = m }, function(e){ st.emErr = e })
-      try{ st.cloud = await flowCloudRaw() }catch(e){ st.cloudErr = e }
+      /* ★ 2026-10-13：传重渲回调 —— 首屏若用的是 jsDelivr 兜底数据（可能带数小时 CDN 缓存），
+         权威源（API/raw）后到且内容更新时会回调这里，把它顶上去重画一次。
+         回调是异步后触发的，那时 paint 早已赋值 —— 不存在「用到未定义的 paint」。 */
+      try{ st.cloud = await flowCloudRaw(false, function(c){
+        st.cloud = c
+        if(st.painted){ try{ paint() }catch(e){} }
+      }) }catch(e){ st.cloudErr = e }
       if(!st.cloud && !st.emErr && emP){
         /* 云端挂了、东财还在预算内跑 → 给它一次机会（最多 FLOW_EM_BUDGET_MS，不会久等） */
         try{ st.tmap = await emP }catch(e){ st.emErr = e }
@@ -10941,7 +11171,8 @@ async function flowLoad(force){
         else if(cloud) stampTxt = '☁ 云端存档 ' + (boards.length && boards[0].asof ? boards[0].asof : asof) + ' · 东财实时暂不可用'
         else stampTxt = asof + ' · 当月累计后台补算中'
         if(cooling && !tmap) stampTxt += ' · 东财冷却中（' + Math.ceil(Math.max(0, FLOW.coolUntil - Date.now()) / 60000) + ' 分钟后自动重试）'
-        $('flowStamp').textContent = stampTxt
+        /* ★ 2026-10-13：追加「存档 <口径日> · 刷新 <本地时刻>」 */
+        $('flowStamp').textContent = stampTxt + flowFreshSuffix()
         flowRender(); flowBindClicks()
         st.painted = true
         /* 涨停结构（1 个 JSONP 请求，非阻塞）：首屏不等它，到了再重渲一次补上标签。
@@ -10962,13 +11193,20 @@ async function flowLoad(force){
   }catch(e){
     logErr('资金流·整页加载', e, { mode:FLOW.mode })
     FLOW.coolUntil = Date.now() + 5 * 60 * 1000
-    $('flowIn').innerHTML = '<div class="flow-empty">加载失败（' + esc(e.message||'网络异常') + '）<br>已进入 5 分钟冷却，稍后点「刷新」重试<br><span style="font-size:11px;color:#8a8f96;">明细已记入「设置 → 系统自检 · 异常日志」</span></div>'
+    /* ★ 2026-10-13：silent 时**不动 UI** —— 后台轮询失败不该把用户正在看的内容
+     *   换成一块错误提示（旧口径会把整页打成「加载失败」，观感极差）。
+     *   静默失败只记日志，保留上一版数据，下一轮自动重试。 */
+    if(!silent){
+      $('flowIn').innerHTML = '<div class="flow-empty">加载失败（' + esc(e.message||'网络异常') + '）<br>已进入 5 分钟冷却，稍后点「刷新」重试<br><span style="font-size:11px;color:#8a8f96;">明细已记入「设置 → 系统自检 · 异常日志」</span></div>'
+    }
   }
   FLOW.loading = false
+  FLOW.at = Date.now()          /* ★ 2026-10-13：记录本次刷新时刻，供自动轮询防抖 */
   if(btn) btn.disabled = false
 }
 function flowOpen(){
   closeSheet(); showPage('pgFlow')
+  flowAutoKick()                /* ★ 2026-10-13：进入本页即启动自动轮询 */
   if(FLOW.loadedMode !== FLOW.mode || !(FLOW.boards && FLOW.boards.length)) flowLoad(false)
 }
 
@@ -11031,18 +11269,14 @@ function catJsonp(url){
     setTimeout(function(){ if(!done){ reject(new Error('涨停池加载超时')); cleanup() } }, 10000)
   })
 }
-/* 云端 flow-history → 板块名 → {code, chg, cum}（当天进程内缓存） */
+/* 云端 flow-history → 板块名 → {code, chg, cum}（当天进程内缓存）
+ * ★ 2026-10-13：复用 flowCloudRaw 的三源竞速 + 3 分钟缓存，不再自己维护一条降级链
+ *   （旧实现裸 fetch 无超时，raw 在国内会挂死）。 */
 var catHist = async function(){
   if(CAT_HIST) return CAT_HIST
-  var urls = [
-    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
-  ]
   var j = null
-  for(var u=0;u<urls.length && !j;u++){
-    try{ var r = await fetch(urls[u]); if(r.ok) j = await r.json() }catch(e){}
-  }
-  if(!j || !j.days || !j.days.length) return null
+  try{ j = await flowCloudRaw(false) }catch(e){ return null }
+  if(!j) return null
   var last = j.days[j.days.length-1], byName = {}
   for(var bk in j.names){
     var isCon = j.names[bk][1] === 3
@@ -11496,8 +11730,12 @@ $('nwCoreBtn').addEventListener('click', function(){
 })
 $('flowRefreshBtn').addEventListener('click', function(){
   logOp('刷新·资金流向', { mode:FLOW.mode })   /* ★ 2026-10-09：操作流水（自检用） */
+  flowAutoStop()                                /* ★ 2026-10-13：手动刷新 = 重置自动轮询计时 */
   flowLoad(true)
 })
+
+/* ---------- 资金流页自动刷新（★ 2026-10-13）----------
+ * 说明见上方 FLOW 定义处的 FLOW_AUTO_* 常量。此处仅保留手动刷新的重置钩子。 */
 $('flowShClose').addEventListener('click', closeSheet)
 /* ★ 2026-10：两融详情页 —— 刷新重拉 + 周期切换（事件委托，容器常驻） */
 $('marginRefreshBtn').addEventListener('click', function(){ marginLoad(true) })

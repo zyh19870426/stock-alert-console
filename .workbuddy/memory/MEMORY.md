@@ -10,7 +10,7 @@
 - ⚠️ **拒绝过度工程**（流程不能比重新做一遍还长）；⚠️ **任何任务先报计划再动手**（最高优先级）。
 
 ## 二、系统与发布硬约定
-1. 已上线：云端 `stock-alert-cloud/`（zyhaaad/stock-alert）+ `stock-alert-console/console.html`（stock-alert-console.app.workbuddy.host，908K 字节 / brotli 238K）。
+1. ★**已上线（2026-10-13 换号后）**：引擎仓 `zyh19870426/stock-alert`、控制台源码仓 `zyh19870426/stock-alert-console`；发布链接恒为 **https://stock-alert-console-51356.app.workbuddy.host/**（app `wbapp_ZW7jAW3uf5GI4dhqbKS8yl`、sandbox `2bf566a395394025b913acd32f2ddac8`）。⚠️**旧链接** `stock-alert-console.app.workbuddy.host`（app `wbapp_cHGw46ZkpUD7DLhbsRrS8X`）仍在线但**永远指旧仓 zyhaaad**、代码不再更新 ⇒ **已弃用，一切以 -51356 为准**（`_tests/accept-online.js` 的 `SITE` 默认值已随之更新，可用 `SITE_URL` 覆盖）。
 2. 改 console.html 必跑 `_tests/` 回归；DOM 测试先 build-preview；算法单一真源（UMD 经 `inject-core.js` 注入 fng/position/signal/chip）。
 3. ⚠️ `sites_deploy` 在本工作区恒定落到监控台应用：**禁止在 D:\mywork 下发布第二个目录**；第二应用只能界面发布该卡，或同域子路径（六壬 `daliuren/` → 必跑 `sync-publish.js`）。
 4. 发布：sites_deploy（entryHtml=console.html、domainPrefix=stock-alert-console、static）→ 发布后**必跑 `accept-online.js`**。**发布同意不跨轮**。云端脚本必备 `--dry`；token 只走环境变量（classic 勾 `repo`+`workflow`）。★**验收清单必须跟着改动走**（只证明旧功能没退化＝虚假安全感）。
@@ -31,7 +31,7 @@
 - ❌ 不可用：东财 `push2/push2his/push2delay` **本机 fetch failed**（2026-10-10 实测，**唯一可用是 `push2test`**，200/293ms 真数据）⇒ **任何东财 URL 一律走 `emGet`/域名池，严禁写死域名**；`stock/get?fields=f127`；个股级 clist `fs=b:BK…`（连 Actions 也 502）；同花顺 `funds/*`（需 cookie 401）；腾讯 `ff_` 个股资金流。★换源**已否掉**（东财↔新浪板块名匹配率 11.8%）。★`emSwap` 正则**必须排除 `push2ex`**（涨停池专用路径在 push2test 上 404）。
 - ★★**`datacenter-web` 是绕开 push2 的正解**（板块成分股 + 全市场当日主力资金 join，见 DOMAIN）。★**F10 `RPT_F10_CORETHEME_BOARDTYPE`＝唯一稳定的个股→板块源**。
 - ★**WAF ≠ 限流**：整片 `http 501` + `waf.tencent.com/501page.html` ⇒ **IP 级封禁、不自愈**；第一反应**换同接口另一域名**，抓取器内置域名回退。
-- ★**取数顺序：GitHub Contents API → raw → jsDelivr**（各限时 9s）。API 2s 拿当日真值；raw 本地恒 `http=000`/timeout；jsDelivr 快但**陈旧**。
+- ★**取数顺序：GitHub Contents API → raw → jsDelivr**（各限时 9s）。API 2s 拿当日真值；raw 本地恒 `http=000`/timeout；jsDelivr 快但**陈旧**。★★**绝不可让 jsDelivr 参与「谁快用谁」的竞速**（2026-10-13 实测：jsDelivr 588ms vs API 9673ms，且带 12h CDN 缓存、`?t=` 破不掉 ⇒ **必然获胜** ⇒ 页面恒停在数小时前的旧存档）。正确裁决＝**权威源(API/raw)优先、兜底源(jsDelivr)不抢跑**：先到先用保首屏，兜底先到时**后台继续等权威源**，内容更新则覆盖 + 回调重渲（`flowCloudRaw(force,onBetter)`；回归＝`_tests/flow-fresh-test.js`）。
 
 ## 五、云端存档契约（可移植性根基）
 - **`rotation.json`**：`boards = 当日同步 + 陈旧补挂`；`count`/`counts` **只算当日同步**，`total` 才是板块总数。⚠️ `stale` 曾**跨轮粘滞** → 已修「每轮先清空再按日期重打」。
