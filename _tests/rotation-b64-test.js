@@ -46,7 +46,7 @@ const b64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
 
 
 w.fngFetch = function (u) {
-  if (String(u).indexOf('api.github.com/repos/zyhaaad/stock-alert/contents/rotation.json') > -1) {
+  if (String(u).indexOf('api.github.com/repos/zyh19870426/stock-alert/contents/rotation.json') > -1) {
     return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ content: b64 }) } });
   }
   return Promise.reject(new Error('stub: 该路径在本测试中必须失败（模拟 raw/jsDelivr 不可达）'));

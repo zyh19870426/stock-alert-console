@@ -20,7 +20,7 @@
  *         命中=方向一致（利好 TN>0 / 利空 TN<0）。
  *         只对「发布日 < 今天」的消息计算（严格避免未来函数）；
  *         bt 已含 t5 的不再重算（冻结），t5 未成熟的重算。
- *   板块名单：云端 zyhaaad/stock-alert flow-history.json（与消息催化同源）。
+ *   板块名单：云端 zyh19870426/stock-alert flow-history.json（与消息催化同源）。
  *   个股名单：新浪 hs_a 全量列表。
  * ============================================================ */
 'use strict'
@@ -104,8 +104,8 @@ async function fetchSinaNews(pages) {
 /* ---------- ② 名单：板块（云端 flow-history）+ 个股（新浪全量） ---------- */
 async function loadBoardMap() {
   const urls = [
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/flow-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
   ]
   for (const u of urls) {
     try {

@@ -44,7 +44,7 @@ const ARCHIVE = {
 (async () => {
   const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://stock-alert-console.app.workbuddy.host/' });
   const w = dom.window;
-  w.localStorage.setItem('sa_owner', 'zyhaaad');
+  w.localStorage.setItem('sa_owner', 'zyh19870426');
   w.localStorage.setItem('sa_repo', 'stock-alert');
   w.localStorage.removeItem('sa_token');
 

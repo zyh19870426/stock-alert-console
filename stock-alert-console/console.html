@@ -996,7 +996,7 @@
   <div class="pbody">
     <div class="card">
       <div class="hint">首次使用填一次。这些信息只存在你自己的手机里，不会上传到任何地方。</div>
-      <label class="fld" style="margin-top:12px;"><span>GitHub 用户名</span><input id="fOwner" placeholder="例如 zyhaaad"></label>
+      <label class="fld" style="margin-top:12px;"><span>GitHub 用户名</span><input id="fOwner" placeholder="例如 zyh19870426"></label>
       <label class="fld" style="margin-top:12px;"><span>仓库名</span><input id="fRepo" placeholder="例如 stock-alert"></label>
       <label class="fld" style="margin-top:12px;"><span>Token（访问令牌）</span><input id="fToken" type="password" placeholder="github_pat_ 或 ghp_ 开头"></label>
       <button class="btn btn-dark btn-wide" id="btnSaveSetting" style="margin-top:15px;">保存并加载</button>
@@ -3775,8 +3775,8 @@ var marginSectorCloudRaw = async function(force){
   if(!force && MARGIN_SECTOR.cloudRaw && MARGIN_SECTOR.cloudAt && now - MARGIN_SECTOR.cloudAt < 10*60*1000) return MARGIN_SECTOR.cloudRaw
   var urls = [
     './margin-sector-history.json?t=' + Date.now(),
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/margin-sector-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/margin-sector-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-sector-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-sector-history.json'
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
@@ -10659,8 +10659,8 @@ var flowCloudRaw = async function(force){
   var now = Date.now()
   if(!force && FLOW.cloudRaw && FLOW.cloudAt && now - FLOW.cloudAt < 10 * 60 * 1000) return FLOW.cloudRaw
   var urls = [
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/flow-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
@@ -11034,8 +11034,8 @@ function catJsonp(url){
 var catHist = async function(){
   if(CAT_HIST) return CAT_HIST
   var urls = [
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/flow-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
@@ -11356,8 +11356,8 @@ async function nwLoad(force){
     $('nwList').innerHTML = '<div class="flow-empty">正在加载消息存档…</div>'
     var urls = [
       './news-history.json?t=' + Date.now(),
-      'https://raw.githubusercontent.com/zyhaaad/stock-alert-console/main/stock-alert-console/news-history.json?t=' + Date.now(),
-      'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert-console@main/stock-alert-console/news-history.json?t=' + Date.now()
+      'https://raw.githubusercontent.com/zyh19870426/stock-alert-console/main/stock-alert-console/news-history.json?t=' + Date.now(),
+      'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert-console@main/stock-alert-console/news-history.json?t=' + Date.now()
     ]
     var j = null
     for(var u=0;u<urls.length && !j;u++){
@@ -12432,9 +12432,9 @@ function rotFetchCloud() {
      现顺序：**GitHub API（无 CDN 缓存）→ raw（无 CDN，国内常不可达）→ jsDelivr（缓存兜底）**，
      每个源各自限时，前一个不通才试下一个（不做并行：raw 在国内会挂满 9s，并行会把首屏一起拖住）。 */
   var urls = [
-    'https://api.github.com/repos/zyhaaad/stock-alert/contents/rotation.json' + t,
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/rotation.json' + t,
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/rotation.json' + t
+    'https://api.github.com/repos/zyh19870426/stock-alert/contents/rotation.json' + t,
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/rotation.json' + t,
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/rotation.json' + t
   ]
   var i = 0
   function next() {

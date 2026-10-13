@@ -35,7 +35,7 @@ function get(url, opts = {}) {
 }
 
 const SITE = 'https://stock-alert-console.app.workbuddy.host';
-const REPO = 'zyhaaad/stock-alert';
+const REPO = 'zyh19870426/stock-alert';
 const GH = process.env.GH_TOKEN || '';
 
 (async () => {
@@ -1213,7 +1213,7 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
     chk('★ [F10] 取数顺序 = GitHub API → raw → jsDelivr（CDN 陈旧的 jsDelivr 不再排链首）',
       (function () {
         const rf = between(onNoCmt, 'function rotFetchCloud()', 'function rotLoad()');
-        const a = rf.indexOf('api.github.com/repos/zyhaaad/stock-alert/contents/rotation.json');
+        const a = rf.indexOf('api.github.com/repos/zyh19870426/stock-alert/contents/rotation.json');
         const b = rf.indexOf('raw.githubusercontent.com');
         const c = rf.indexOf('cdn.jsdelivr.net');
         return a >= 0 && b > a && c > b;
@@ -1494,8 +1494,8 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
     add('★ [F15] 板块两融源 = 云端 margin-sector-history.json',
       /margin-sector-history\.json/.test(onNoCmt));
     add('★ [F15] 双源降级 raw.githubusercontent + jsDelivr（同 flowCloudRaw 范式）',
-      /raw\.githubusercontent\.com\/zyhaaad\/stock-alert\/main\/margin-sector-history\.json/.test(onNoCmt) &&
-      /cdn\.jsdelivr\.net\/gh\/zyhaaad\/stock-alert@main\/margin-sector-history\.json/.test(onNoCmt));
+      /raw\.githubusercontent\.com\/zyh19870426\/stock-alert\/main\/margin-sector-history\.json/.test(onNoCmt) &&
+      /cdn\.jsdelivr\.net\/gh\/zyh19870426\/stock-alert@main\/margin-sector-history\.json/.test(onNoCmt));
     add('★ [F15] 行业/题材切换按钮已注入（data-mk="2"/"3"）',
       /data-mk="2"/.test(onNoCmt) && /data-mk="3"/.test(onNoCmt));
     add('★ [F15] 面板声明「不构成方向判断」',

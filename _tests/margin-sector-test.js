@@ -19,7 +19,7 @@ const seg = segBlock + '\n' + top3win;
 console.log('==== ① 锚点 + 方向禁词 ====');
 chk('★ 片段存在（板块模块块已注入）', segBlock.length > 500, 'segLen=' + segBlock.length);
 chk('★ 云端存档源 = margin-sector-history.json', /margin-sector-history\.json/.test(seg));
-chk('★ 双源降级 raw.githubusercontent + jsDelivr', /raw\.githubusercontent\.com\/zyhaaad\/stock-alert\/main\/margin-sector-history\.json/.test(seg) && /cdn\.jsdelivr\.net\/gh\/zyhaaad\/stock-alert@main\/margin-sector-history\.json/.test(seg));
+chk('★ 双源降级 raw.githubusercontent + jsDelivr', /raw\.githubusercontent\.com\/zyh19870426\/stock-alert\/main\/margin-sector-history\.json/.test(seg) && /cdn\.jsdelivr\.net\/gh\/zyh19870426\/stock-alert@main\/margin-sector-history\.json/.test(seg));
 chk('★ pgMargin 含板块面板容器 id="marginSector"', /id="marginSector"/.test(HTML));
 chk('★ 行业/题材切换按钮 data-mk="2"/"3"', /data-mk="2"/.test(seg) && /data-mk="3"/.test(seg));
 chk('★ 首页卡含「两融最集中 TOP3」行', /两融最集中 TOP3/.test(seg));

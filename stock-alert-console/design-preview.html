@@ -996,7 +996,7 @@
   <div class="pbody">
     <div class="card">
       <div class="hint">首次使用填一次。这些信息只存在你自己的手机里，不会上传到任何地方。</div>
-      <label class="fld" style="margin-top:12px;"><span>GitHub 用户名</span><input id="fOwner" placeholder="例如 zyhaaad"></label>
+      <label class="fld" style="margin-top:12px;"><span>GitHub 用户名</span><input id="fOwner" placeholder="例如 zyh19870426"></label>
       <label class="fld" style="margin-top:12px;"><span>仓库名</span><input id="fRepo" placeholder="例如 stock-alert"></label>
       <label class="fld" style="margin-top:12px;"><span>Token（访问令牌）</span><input id="fToken" type="password" placeholder="github_pat_ 或 ghp_ 开头"></label>
       <button class="btn btn-dark btn-wide" id="btnSaveSetting" style="margin-top:15px;">保存并加载</button>
@@ -1159,6 +1159,36 @@
   </div>
 </div>
 
+<!-- ============ 每日消息面（★ 2026-10-11 新增独立页：不动「消息催化」任何代码，仅复用公共工具） ============ -->
+<div class="page" id="pgNews">
+  <div class="pbar">
+    <button class="back" data-back="pgNews"><svg width="11" height="18" viewBox="0 0 11 18"><path d="M9.5 1.5L2 9l7.5 7.5" fill="none" stroke="#23262b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <h2>每日消息面</h2>
+    <span class="sp" style="flex:1;"></span>
+    <span class="pill" id="nwStampPill" style="display:none;"></span>
+  </div>
+  <div class="pbody">
+    <div class="flow-meta">
+      <span class="flow-stamp" id="nwStamp"></span>
+      <button class="flow-refresh" id="nwRefreshBtn">刷新</button>
+    </div>
+    <div id="nwStat"></div>
+    <div class="vtabs" id="nwTabs" style="margin:2px 20px 8px;">
+      <button class="vtab on" data-f="all">全部</button>
+      <button class="vtab" data-f="利好">利好</button>
+      <button class="vtab" data-f="利空">利空</button>
+      <button id="nwCoreBtn" style="margin-left:auto;padding:3px 11px;border:1px solid #b7dcc0;border-radius:7px;background:#eaf6ec;color:#2f7d32;font-size:11px;cursor:pointer;">仅核心 ✓</button>
+    </div>
+    <div class="flow-legend" style="margin-top:2px;">
+      <span>排序 = <b>影响力</b>（3 关键政策/多点关联 · 2 单点关联 · 1 一般）× <b>重要度</b>（3 政策主体 · 2 涉及板块/个股 · 1 一般），同级按时间倒序</span>
+      <span><b>回测口径</b>（预注册）：T0 = 消息发布日首个交易日收盘，T+N = 其后第 N 个交易日收盘相对 T0 涨跌幅（取前 3 关联个股 / 前 3 板块等权均值）；命中 = 方向一致。只对发布日 &lt; 今天的消息计算，无未来函数</span>
+      <span>数据源：新浪 7×24 快讯 · 每日 20:05 自动抓取存档；页面打开时实时补充当日快讯（实时部分无回测列）</span>
+      <span id="nwNote">数据加载中…</span>
+    </div>
+    <div id="nwList"></div>
+  </div>
+</div>
+
 <!-- ============ 两融 · 杠杆水位（★ 2026-10 详情页：周期 20/60/120/250 切换） ============ -->
 <div class="page" id="pgMargin">
   <div class="pbar">
@@ -1199,6 +1229,7 @@
   <div class="srow" id="rowFng"><span>A股恐贪指数</span><span class="cnt" id="fngCnt"></span><span class="arrow">›</span></div>
   <div class="srow" id="rowFlow"><span>资金流向监控</span><span class="arrow">›</span></div>
   <div class="srow" id="rowCat"><span>消息催化</span><span class="arrow">›</span></div>
+  <div class="srow" id="rowNews"><span>每日消息面</span><span class="arrow">›</span></div>
   <div class="srow" id="rowArchive"><span>删除记录</span><span class="cnt" id="arcCnt">0</span><span class="arrow">›</span></div>
   <div class="srow" id="rowSetting"><span>设置与备份</span><span class="arrow">›</span></div>
 </div>
@@ -1340,7 +1371,7 @@ function toast(msg){
 function showError(m){ var e=$('err'); if(!e) return; e.textContent = m||''; e.className = 'err' + (m?' on':'') }
 /* 页面名 → 中文（自检日志里显示，便于回答「你刚才在哪一页坏的」） */
 var PAGE_NAME = { pgHome:'首页', pgAdd:'添加', pgHoldings:'持仓', pgPicks:'推荐', pgStyle:'风格驾驶舱',
-  pgRotation:'板块轮动', pgArchive:'归档', pgSetting:'设置', pgFng:'恐贪指数', pgFlow:'资金流向', pgCat:'消息催化' }
+  pgRotation:'板块轮动', pgArchive:'归档', pgSetting:'设置', pgFng:'恐贪指数', pgFlow:'资金流向', pgCat:'消息催化', pgNews:'每日消息面' }
 /* ★ 2026-10-09 用户要求：首页「距触发最近」模块隐藏。
    开关放在模块级作用域（不是函数内），便于测试断言与一行恢复——置回 true 即可。 */
 var DASH_NEAR = false
@@ -3745,8 +3776,8 @@ var marginSectorCloudRaw = async function(force){
   if(!force && MARGIN_SECTOR.cloudRaw && MARGIN_SECTOR.cloudAt && now - MARGIN_SECTOR.cloudAt < 10*60*1000) return MARGIN_SECTOR.cloudRaw
   var urls = [
     './margin-sector-history.json?t=' + Date.now(),
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/margin-sector-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/margin-sector-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-sector-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-sector-history.json'
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
@@ -10629,8 +10660,8 @@ var flowCloudRaw = async function(force){
   var now = Date.now()
   if(!force && FLOW.cloudRaw && FLOW.cloudAt && now - FLOW.cloudAt < 10 * 60 * 1000) return FLOW.cloudRaw
   var urls = [
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/flow-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
@@ -11004,8 +11035,8 @@ function catJsonp(url){
 var catHist = async function(){
   if(CAT_HIST) return CAT_HIST
   var urls = [
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/flow-history.json',
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/flow-history.json'
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/flow-history.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/flow-history.json'
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
@@ -11259,6 +11290,210 @@ $('rowFundPick').addEventListener('click', function(){
   window.open('/fund-picker/', '_blank', 'noopener')
 })
 $('catRefreshBtn').addEventListener('click', function(){ catLoad(true) })
+
+/* ========== 每日消息面（2026-10-11 新增，独立于消息催化） ==========
+ * 数据：news-history.json（每日 20:05 由 news-daily.js 云端管道生成，三源降级读取）
+ *       + 打开页面时实时补充当日新浪快讯（复用 catNews()，客户端按同一套预注册词表分类）
+ * 回测：脚本端预计算（T+1/3/5，预注册口径见 news-daily.js 头注释），页面只读不重算。
+ * ★ 与 news-daily.js 的 RULES 必须保持一致（页面用存档里的 rules 字段做单一真源，缺失才用内嵌副本）。 */
+var NW = { loading:false, data:null, filter:'all', onlyCore:true, live:null }
+var NW_RULES_FALLBACK = {
+  goodStrong: ['利好', '降准', '降息', '增持', '回购', '中标', '业绩预增', '预盈', '净利润增', '扭亏', '获批', '批准通过', '重大合同', '签署重大'],
+  good: ['超预期', '创新高', '历史新高', '涨价', '提价', '订单', '签约', '战略合作', '达成合作', '补贴', '免税', '减税', '稳增长', '研发布局', '扩产'],
+  badStrong: ['利空', '减持', '立案', '留置', '罚款', '处罚', '警示函', '问询函', '监管函', '预亏', '商誉减值', '计提减值', '退市', '违约', '破产', '诉讼', '仲裁', '下修', '下调评级', '质押爆仓', '停产', '爆炸', '火灾', '调查', '强制退市'],
+  bad: ['降价', '裁员', '终止', '撤回', '失败', '风险提示', '解禁', '亏损', '下滑', '回落'],
+  policy: ['国务院', '国常会', '中央政治局', '央行', '中国人民银行', '证监会', '金融监管总局', '发改委', '财政部', '工信部', '商务部', '住建部', '国家能源局', '国家统计局', '美联储', '欧央行', '欧洲央行', '日本央行', 'LPR', 'MLF', '逆回购', '存款准备金', 'GDP', 'CPI', 'PPI', 'PMI', '社融', '关税', '十五五', '新国九条', '中办', '国办']
+}
+function nwRules(){ return (NW.data && NW.data.rules) ? NW.data.rules : NW_RULES_FALLBACK }
+function nwHits(x, words){ var s=0; for(var i=0;i<words.length;i++) if(x.indexOf(words[i])>=0) s++; return s }
+/* 实时快讯分类（与脚本同规则；无全量个股名单，个股关联只做涨停池/自选/持仓内的名称匹配） */
+function nwClassify(x){
+  var R = nwRules()
+  var g = nwHits(x, R.good) + nwHits(x, R.goodStrong) * 2
+  var b = nwHits(x, R.bad) + nwHits(x, R.badStrong) * 2
+  var dir = g > b ? '利好' : (b > g ? '利空' : '中性')
+  var pol = nwHits(x, R.policy)
+  var bks = [], sts = []
+  try{
+    if(typeof catHist === 'function' && CAT_HIST){
+      for(var nm in CAT_HIST.byName){ if(nm.length >= 2 && x.indexOf(nm) >= 0){ bks.push([CAT_HIST.byName[nm].code, nm]); if(bks.length >= 4) break } }
+    }
+    var pool = {}
+    try{
+      var hold = holdingsOf()
+      for(var i=0;i<hold.length;i++){ var h=hold[i]; if(h.name && h.code) pool[h.name] = h.code }
+    }catch(e){}
+    try{
+      if(typeof ZT !== 'undefined' && ZT.byCode){ for(var c2 in ZT.byCode){ var s2=ZT.byCode[c2]; if(s2 && s2.n) pool[s2.n] = c2 } }
+    }catch(e){}
+    for(var pn in pool){ if(pn.length >= 2 && x.indexOf(pn) >= 0){ sts.push([pool[pn], pn]); if(sts.length >= 4) break } }
+  }catch(e){}
+  var relN = bks.length + sts.length
+  var imp = pol > 0 ? 3 : (relN > 0 ? 2 : 1)
+  var inf = dir === '中性' ? 0 : ((imp === 3 || relN >= 4) ? 3 : (relN >= 1 ? 2 : 1))
+  return { dir:dir, imp:imp, inf:inf, bks:bks, sts:sts }
+}
+async function nwLive(){
+  if(NW.live) return NW.live
+  var news = []
+  try{ news = (typeof catNews === 'function') ? (await catNews()) : [] }catch(e){ news = [] }
+  if(!news || !news.length){ NW.live = []; return NW.live }
+  var today = (function(){ var d=new Date(); var p=function(n){return (n<10?'0':'')+n}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()) })()
+  var out = []
+  for(var i=0;i<news.length;i++){
+    var it = news[i]
+    if(String(it.t || '').slice(0, 10) !== today) continue
+    var c = nwClassify(it.x)
+    out.push({ t:it.t, x:it.x, dir:c.dir, imp:c.imp, inf:c.inf, bks:c.bks, sts:c.sts, core:((c.dir !== '中性' && c.imp >= 2) || c.imp === 3), live:true })
+  }
+  NW.live = out
+  return out
+}
+async function nwLoad(force){
+  if(NW.loading) return
+  NW.loading = true
+  var btn = $('nwRefreshBtn'); if(btn) btn.disabled = true
+  if(!NW.data || force){
+    $('nwList').innerHTML = '<div class="flow-empty">正在加载消息存档…</div>'
+    var urls = [
+      './news-history.json?t=' + Date.now(),
+      'https://raw.githubusercontent.com/zyh19870426/stock-alert-console/main/stock-alert-console/news-history.json?t=' + Date.now(),
+      'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert-console@main/stock-alert-console/news-history.json?t=' + Date.now()
+    ]
+    var j = null
+    for(var u=0;u<urls.length && !j;u++){
+      try{
+        var r = await fngFetch(urls[u], {}, 12000)
+        if(r.ok){ var jj = await r.json(); if(jj && Array.isArray(jj.msgs)) j = jj }
+      }catch(e){}
+    }
+    if(j) NW.data = j
+  }
+  NW.loading = false
+  if(btn) btn.disabled = false
+  if(!NW.data){
+    $('nwList').innerHTML = '<div class="flow-empty">消息存档不可用（三源均失败）。每日 20:05 自动更新，稍后再试。</div>'
+    $('nwNote').textContent = '数据加载失败'
+    return
+  }
+  nwPaint(null)
+  /* 实时补充当日快讯（到了再重画一次） */
+  try{
+    var live = await nwLive()
+    if(live && live.length) nwPaint(live)
+  }catch(e){}
+}
+function nwTag(dir){
+  if(dir === '利好') return '<span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:10.5px;background:#fdeaea;color:#c0392b;font-weight:600;">利好</span>'
+  if(dir === '利空') return '<span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:10.5px;background:#e6f5ee;color:#1a9a63;font-weight:600;">利空</span>'
+  return '<span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:10.5px;background:#f0f1f3;color:#6d7278;">中性</span>'
+}
+function nwBtLine(m){
+  if(!m.bt || (!m.bt.s || m.bt.s.n === 0) && (!m.bt.b || m.bt.b.n === 0)){
+    var d = String(m.t || '').slice(0, 10)
+    var today = todayStr()
+    return (m.live || d >= today) ? '' : '<div style="font-size:10.5px;color:#a7abb2;margin-top:3px;">回测：数据未取到，后续运行自动补算</div>'
+  }
+  var h = '<div style="font-size:10.5px;color:#6d7278;margin-top:4px;">回测 '
+  var seg = function(o, label){
+    if(!o || o.n === 0) return ''
+    var c1 = o.t1 == null ? '' : (o.t1 > 0 ? 'flow-up' : (o.t1 < 0 ? 'flow-dn' : ''))
+    var s = label + ' T1<span class="' + c1 + '">' + (o.t1 == null ? '—' : (o.t1 > 0 ? '+' : '') + o.t1.toFixed(2) + '%') + '</span>'
+    s += ' T3' + (o.t3 == null ? '—' : (o.t3 > 0 ? '+' : '') + o.t3.toFixed(2) + '%') + ' T5' + (o.t5 == null ? '—' : (o.t5 > 0 ? '+' : '') + o.t5.toFixed(2) + '%')
+    if(o.h1 != null) s += ' 命中' + o.h1 + '%'
+    return s
+  }
+  var s1 = seg(m.bt.s, '个股'), s2 = seg(m.bt.b, '板块')
+  h += (s1 ? s1 : '') + (s1 && s2 ? ' ｜ ' : '') + (s2 ? s2 : '') + '<span style="color:#a7abb2;">（' + ((m.bt.s && m.bt.s.n) || 0) + '股' + ((m.bt.b && m.bt.b.n) || 0) + '板）</span></div>'
+  return h
+}
+function nwPaint(live){
+  var j = NW.data
+  var msgs = j.msgs.slice()
+  var seen = {}
+  for(var i=0;i<msgs.length;i++) seen[msgs[i].t + '|' + String(msgs[i].x || '').slice(0, 80)] = 1
+  if(live && live.length){
+    for(var k=0;k<live.length;k++){
+      var L = live[k]
+      if(!seen[L.t + '|' + String(L.x || '').slice(0, 80)]) msgs.push(L)
+    }
+  }
+  /* 重大核心过滤：默认仅展示 core（严格口径），噪音经「全部消息」切换可见 */
+  var pool = msgs.filter(function(m){ return NW.onlyCore ? (m.core === true) : true })
+  var today = todayStr()
+  var td = pool.filter(function(m){ return String(m.t).slice(0, 10) === today })
+  var cG = td.filter(function(m){ return m.dir === '利好' }).length
+  var cB = td.filter(function(m){ return m.dir === '利空' }).length
+  var cN = td.length - cG - cB
+  /* 前瞻性统计：core 池内已回测（bt.s.n>0）按方向汇总 T1 均值与命中率 */
+  var btG = pool.filter(function(m){ return m.dir === '利好' && m.bt && m.bt.s && m.bt.s.n > 0 })
+  var btB = pool.filter(function(m){ return m.dir === '利空' && m.bt && m.bt.s && m.bt.s.n > 0 })
+  var avg = function(a, f){ if(!a.length) return '—'; var s=0; for(var i=0;i<a.length;i++) s += f(a[i]); return (s/a.length).toFixed(2) }
+  $('nwStat').innerHTML = '<div class="flow-stat">' +
+    '<div class="c"><div class="v flow-up">' + cG + '</div><div class="k">今日利好</div></div>' +
+    '<div class="c"><div class="v flow-dn">' + cB + '</div><div class="k">今日利空</div></div>' +
+    '<div class="c"><div class="v">' + cN + '</div><div class="k">今日中性</div></div>' +
+    '<div class="c"><div class="v" style="font-size:13px;">' + pool.length + '</div><div class="k">' + (NW.onlyCore ? '核心消息' : '存档(120天)') + '</div></div></div>' +
+    '<div style="margin:0 20px 8px;padding:8px 11px;border-radius:10px;background:#f6f7f9;font-size:11px;line-height:1.7;color:#444;">' +
+    '前瞻性（已回测 ' + (btG.length + btB.length) + ' 条 · T+1 口径）：利好 <b>' + btG.length + '</b> 条 均值 <span class="flow-up">' + avg(btG, function(m){ return m.bt.s.t1 }) + '</span> 命中 ' + avg(btG, function(m){ return m.bt.s.h1 }) + '%' +
+    ' ｜ 利空 <b>' + btB.length + '</b> 条 均值 <span class="flow-dn">' + avg(btB, function(m){ return m.bt.s.t1 }) + '</span> 命中 ' + avg(btB, function(m){ return m.bt.s.h1 }) + '%' +
+    '<span style="color:#8a8f96;">（历史样本随每日存档滚动积累，非预测保证）</span></div>'
+  var flt = NW.filter
+  var arr = pool.filter(function(m){ return flt === 'all' ? true : m.dir === flt })
+  arr.sort(function(x, y){
+    if(!NW.onlyCore){ var xc = (x.core === true ? 1 : 0), yc = (y.core === true ? 1 : 0); if(xc !== yc) return xc - yc }
+    return (y.inf || 0) - (x.inf || 0) || (y.imp || 0) - (x.imp || 0) || (x.t < y.t ? 1 : -1)
+  })
+  var CAP = 80
+  var h = ''
+  for(var n=0;n<arr.length && n<CAP;n++){
+    var m = arr[n]
+    var chips = ''
+    for(var b1=0;b1<m.bks.length && b1<4;b1++){
+      chips += '<a style="display:inline-block;padding:1px 7px;margin:2px 4px 0 0;border-radius:6px;background:#eef1f5;color:#43506b;font-size:10.5px;text-decoration:none;" href="https://quote.eastmoney.com/bk/90.' + esc(m.bks[b1][0]) + '.html" target="_blank" rel="noopener">' + esc(m.bks[b1][1]) + '</a>'
+    }
+    for(var s1=0;s1<m.sts.length && s1<4;s1++){
+      var mkt = m.sts[s1][0].charAt(0) === '6' ? 'sh' : 'sz'
+      chips += '<a style="display:inline-block;padding:1px 7px;margin:2px 4px 0 0;border-radius:6px;background:#f4f0e6;color:#7a5b12;font-size:10.5px;text-decoration:none;" href="https://quote.eastmoney.com/' + mkt + esc(m.sts[s1][0]) + '.html" target="_blank" rel="noopener">' + esc(m.sts[s1][1]) + '</a>'
+    }
+    h += '<div class="flow-topc" style="margin:0 0 8px;">' +
+      '<div style="display:flex;gap:6px;align-items:center;font-size:11px;color:#8a8f96;">' + nwTag(m.dir) +
+      '<span>' + esc(String(m.t).slice(5, 16)) + '</span>' +
+      '<span style="color:#43506b;">影响' + (m.inf || 0) + ' · 重' + (m.imp || 1) + '</span>' +
+      (m.live ? '<span style="color:#e8a020;">实时</span>' : '') + '</div>' +
+      '<div style="font-size:12.5px;line-height:1.55;color:#23262b;margin-top:5px;">' + esc(String(m.x || '').slice(0, 160)) + (String(m.x || '').length > 160 ? '…' : '') + '</div>' +
+      (chips ? '<div style="margin-top:3px;">' + chips + '</div>' : '') +
+      nwBtLine(m) + '</div>'
+  }
+  if(!arr.length) h = '<div class="flow-empty">无匹配消息</div>'
+  else if(arr.length > CAP) h += '<div class="flow-empty">仅显示前 ' + CAP + ' 条（共 ' + arr.length + '），收窄筛选看更多</div>'
+  $('nwList').innerHTML = h
+  $('nwStamp').textContent = '存档 ' + j.updated + (NW.live && NW.live.length ? ' · 实时补充 ' + NW.live.length + ' 条' : '')
+  $('nwNote').textContent = '重大核心口径（预注册）：有方向且涉及板块/个股，或政策宏观；其余为噪音，点「全部消息」可见。方向分类为固定词表'
+}
+function nwOpen(){ closeSheet(); showPage('pgNews'); nwLoad(false) }
+$('rowNews').addEventListener('click', function(){ nwOpen() })
+$('nwRefreshBtn').addEventListener('click', function(){ NW.live = null; nwLoad(true) })
+;(function(){
+  var ts = document.querySelectorAll('#nwTabs .vtab')
+  for(var i=0;i<ts.length;i++){
+    ts[i].addEventListener('click', function(){
+      var bs = document.querySelectorAll('#nwTabs .vtab')
+      for(var k=0;k<bs.length;k++) bs[k].classList.remove('on')
+      this.classList.add('on')
+      NW.filter = this.getAttribute('data-f') || 'all'
+      if(NW.data) nwPaint(NW.live)
+    })
+  }
+})()
+$('nwCoreBtn').addEventListener('click', function(){
+  NW.onlyCore = !NW.onlyCore
+  this.textContent = NW.onlyCore ? '仅核心 ✓' : '全部消息'
+  this.style.background = NW.onlyCore ? '#eaf6ec' : '#ffffff'
+  this.style.color = NW.onlyCore ? '#2f7d32' : '#8a8f96'
+  this.style.borderColor = NW.onlyCore ? '#b7dcc0' : '#cfd6e0'
+  if(NW.data) nwPaint(NW.live)
+})
 $('flowRefreshBtn').addEventListener('click', function(){
   logOp('刷新·资金流向', { mode:FLOW.mode })   /* ★ 2026-10-09：操作流水（自检用） */
   flowLoad(true)
@@ -12198,9 +12433,9 @@ function rotFetchCloud() {
      现顺序：**GitHub API（无 CDN 缓存）→ raw（无 CDN，国内常不可达）→ jsDelivr（缓存兜底）**，
      每个源各自限时，前一个不通才试下一个（不做并行：raw 在国内会挂满 9s，并行会把首屏一起拖住）。 */
   var urls = [
-    'https://api.github.com/repos/zyhaaad/stock-alert/contents/rotation.json' + t,
-    'https://raw.githubusercontent.com/zyhaaad/stock-alert/main/rotation.json' + t,
-    'https://cdn.jsdelivr.net/gh/zyhaaad/stock-alert@main/rotation.json' + t
+    'https://api.github.com/repos/zyh19870426/stock-alert/contents/rotation.json' + t,
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/rotation.json' + t,
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/rotation.json' + t
   ]
   var i = 0
   function next() {
