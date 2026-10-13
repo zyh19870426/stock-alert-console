@@ -176,7 +176,7 @@ async function ensureInit() {
     if (changedItems.length > 40) console.log('     … 另有 ' + (changedItems.length - 40) + ' 个')
   }
   if (extra.length) {
-    console.log('  —— 将在远端被移除 --')
+    console.log('  —— ' + (PATCH ? '远端独有（补丁模式：原样保留）' : '将在远端被移除') + ' --')
     for (const m of extra.slice(0, 20)) console.log('     - ' + m.path)
     if (extra.length > 20) console.log('     … 另有 ' + (extra.length - 20) + ' 个')
   }

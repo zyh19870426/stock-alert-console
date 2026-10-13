@@ -82,27 +82,40 @@ if(api && api.demoMarginSectorData){
   chk('★ demo 板块数据：每个板块含 rzye/成员数/名称', d.sectors.every(x=>x.rzye>0 && x.members>0 && x.name));
 
   api.MARGIN_SECTOR.ok = true; api.MARGIN_SECTOR.err=''; api.MARGIN_SECTOR.date=d.date;
-  api.MARGIN_SECTOR.sectors = d.sectors; api.MARGIN_SECTOR.kind='2'; api.MARGIN_SECTOR.expanded=false;
+  api.MARGIN_SECTOR.sectors = d.sectors; api.MARGIN_SECTOR.kind='2';
   const htmlInd = api.marginSectorHtml();
   chk('★ 面板渲染：含「板块 / 题材消耗两融占比」标题', /板块 \/ 题材消耗两融占比/.test(htmlInd));
   chk('★ 面板渲染：含「不构成方向判断」', /不构成方向判断/.test(htmlInd));
   chk('★ 面板渲染：含「数据日」戳（T+1 标注）', /数据日/.test(htmlInd) && /T\+1/.test(htmlInd));
   const indList = d.sectors.filter(x=>x.kind===2).sort((a,b)=>b.sharePct-a.sharePct);
   chk('★ 面板渲染：行业视图含 TOP1 行业名', htmlInd.indexOf(esc(indList[0].name)) >= 0);
-  chk('★ 面板渲染：折叠「其他」行（行业共 30 > TOP12）', /其他（/.test(htmlInd) && /展开全部 30 个行业/.test(htmlInd));
   chk('★ 面板渲染：含行业切换按钮（data-mk=2）', /data-mk="2"/.test(htmlInd));
+  chk('★ 面板渲染：demo 30 行业（<50）→ 无截断提示、无折叠控件', !/仅列前/.test(htmlInd) && !/其他（/.test(htmlInd) && !/展开全部|收起|data-mex/.test(htmlInd));
 
   api.MARGIN_SECTOR.kind='3';
   const htmlCon = api.marginSectorHtml();
   const conList = d.sectors.filter(x=>x.kind===3).sort((a,b)=>b.sharePct-a.sharePct);
   chk('★ 面板渲染：题材视图含 TOP1 题材名', htmlCon.indexOf(esc(conList[0].name)) >= 0);
-  chk('★ 面板渲染：题材视图含「展开全部 25 个题材」', /展开全部 25 个题材/.test(htmlCon));
+  chk('★ 面板渲染：题材视图同样无折叠控件', !/展开全部|收起|data-mex|其他（/.test(htmlCon));
 
-  api.MARGIN_SECTOR.expanded=true; api.MARGIN_SECTOR.kind='2';
-  const htmlExp = api.marginSectorHtml();
-  chk('★ 面板渲染：展开后无「其他」折叠行，显示「收起」', !/其他（/.test(htmlExp) && /收起/.test(htmlExp));
+  /* ★ 2026-10-13：显示条数 TOP 12 → 固定前 50（尾部零星不展示、不聚合、不可展开）—— 用 >50 条夹具验证截断 */
+  const big = [];
+  for(let i=0;i<60;i++) big.push({ bk:'I'+i, name:'行业'+i, kind:2, rzye:(60-i)*1e8, sharePct:(60-i)/2000, members:20+i });
+  for(let i=0;i<55;i++) big.push({ bk:'C'+i, name:'题材'+i, kind:3, rzye:(55-i)*1e8, sharePct:(55-i)/2000, members:20+i });
+  api.MARGIN_SECTOR.sectors = big; api.MARGIN_SECTOR.kind='2';
+  const hBig = api.marginSectorHtml();
+  const nRow = (hBig.match(/class="ms-row"/g)||[]).length;
+  chk('★ 截断：行业 60 条只渲染前 50 条', nRow === 50, 'rows=' + nRow);
+  chk('★ 截断：TOP1「行业0」在、第 51 名「行业50」不在', hBig.indexOf('行业0') >= 0 && hBig.indexOf('行业50') < 0);
+  chk('★ 截断：无「其他（N 个）」聚合行', !/其他（/.test(hBig));
+  chk('★ 截断：无可点展开/收起控件', !/data-mex/.test(hBig) && !/展开全部/.test(hBig) && !/收起/.test(hBig));
+  chk('★ 截断：提示总数与截断阈值「共 60 个行业…仅列前 50」', /共 60 个行业/.test(hBig) && /仅列前 50/.test(hBig));
+  api.MARGIN_SECTOR.kind='3';
+  const hBig3 = api.marginSectorHtml();
+  chk('★ 截断：题材 55 条只渲染前 50 条', (hBig3.match(/class="ms-row"/g)||[]).length === 50);
+  chk('★ 截断：题材提示「共 55 个题材」', /共 55 个题材/.test(hBig3));
 
-  api.MARGIN_SECTOR.ok=false; api.MARGIN_SECTOR.err='云端存档不可用'; api.MARGIN_SECTOR.expanded=false;
+  api.MARGIN_SECTOR.ok=false; api.MARGIN_SECTOR.err='云端存档不可用';
   const htmlErr = api.marginSectorHtml();
   chk('★ 面板渲染：错误态诚实文案「两融板块数据暂不可用」', /两融板块数据暂不可用/.test(htmlErr));
   chk('★ 面板渲染：错误态无方向禁词', !/要涨|要跌|可买|该躲/.test(htmlErr));

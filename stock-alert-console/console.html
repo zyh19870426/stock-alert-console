@@ -3812,7 +3812,7 @@ async function marginEnsure(){
 /* ===================== 第二步：板块 / 题材消耗两融占比 =====================
  * 板块两融 = 成分股融资余额之和（T+1，由云端 margin-sector-history.json 聚合生成）。
  * 只描述事实与位置（占比/绝对额/成员数），绝不写方向措辞。 */
-var MARGIN_SECTOR = { ok:false, busy:false, err:'', at:'', date:'', total:0, sectors:[], kind:'2', expanded:false, cloudRaw:null, cloudAt:0 }
+var MARGIN_SECTOR = { ok:false, busy:false, err:'', at:'', date:'', total:0, sectors:[], kind:'2', cloudRaw:null, cloudAt:0 }
 /* 云端存档三源降级（同域名 ./ → raw.githubusercontent → jsDelivr）；10 分钟缓存；失败抛错交诚实空态。
    ★ 同域名优先：把生成的 margin-sector-history.json 放到 console.html 同目录即可直读，免云端仓库依赖。 */
 var marginSectorCloudRaw = async function(force){
@@ -3867,26 +3867,19 @@ function marginSectorHtml(){
   var list = S.sectors.filter(function(x){ return String(x.kind) === String(S.kind) })
   list.sort(function(a,b){ return (Number(b.sharePct)||0) - (Number(a.sharePct)||0) })
   var maxPct = list.length ? list[0].sharePct : 1
-  var TOP = 12
-  var shown = S.expanded ? list : list.slice(0, TOP)
-  var other = S.expanded ? [] : list.slice(TOP)
-  var otherPct = other.reduce(function(a,b){ return a + (Number(b.sharePct)||0) }, 0)
+  /* ★ 2026-10-13：固定展示前 50（主流板块/题材），尾部零星小板块不展示也不聚合 —— 股民口语化名由云端 alias 提供 */
+  var TOP = 50
+  var shown = list.slice(0, TOP)
   var rows = shown.map(function(x){
     var w = maxPct > 0 ? (Number(x.sharePct)/maxPct*100) : 0
     return '<div class="ms-row">' +
-      '<div class="ms-nm" title="'+esc(x.name)+'">'+esc(x.name)+'</div>' +
+      '<div class="ms-nm" title="'+esc(x.full || x.name)+'">'+esc(x.name)+'</div>' +
       '<div class="ms-bar"><span style="width:'+w.toFixed(1)+'%"></span></div>' +
       '<div class="ms-v">'+(x.sharePct!=null?(Number(x.sharePct)*100).toFixed(2)+'%':'—')+'</div>' +
       '<div class="ms-amt">'+fmtWanYi(x.rzye)+'</div>' +
       '<div class="ms-mem">'+(x.members!=null?x.members:'—')+' 只</div>' +
     '</div>'
   })
-  if(other.length){
-    rows.push('<div class="ms-row ms-other"><div class="ms-nm">其他（'+other.length+' 个'+kName+'）</div>' +
-      '<div class="ms-bar"></div>' +
-      '<div class="ms-v">'+(otherPct*100).toFixed(2)+'%</div>' +
-      '<div class="ms-amt"></div><div class="ms-mem"></div></div>')
-  }
   var h = '<div class="md-sec" style="margin-top:14px;">'
   h += '<div class="dash-h" style="font-size:14px;">板块 / 题材消耗两融占比</div>'
   h += '<div class="near-meta" style="margin:2px 0 8px;color:#9aa0a6;">数据日 '+esc(S.date)+'（T+1）· 板块两融=成分股融资余额之和 · 不构成方向判断</div>'
@@ -3895,10 +3888,8 @@ function marginSectorHtml(){
   h += '<button class="vtab '+(S.kind==='3'?'on':'')+'" data-mk="3">题材</button>'
   h += '</div>'
   h += '<div class="ms-list">'+rows.join('')+'</div>'
-  if(!S.expanded && list.length > TOP){
-    h += '<div class="ms-toggle" data-mex="1">展开全部 '+list.length+' 个'+kName+' ›</div>'
-  } else if(S.expanded){
-    h += '<div class="ms-toggle" data-mex="0">收起 ›</div>'
+  if(list.length > TOP){
+    h += '<div class="near-meta" style="margin-top:6px;">共 '+list.length+' 个'+kName+'，按两融占比降序仅列前 '+TOP+'（尾部零星已屏蔽）</div>'
   }
   h += '</div>'
   return h
@@ -11742,7 +11733,6 @@ var mpTabs = $('marginPeriodTabs')
 if(mpTabs) mpTabs.addEventListener('click', function(ev){ var b = ev.target.closest('[data-mp]'); if(b) renderMarginPeriod(b.getAttribute('data-mp')) })
 if($('marginSector')) $('marginSector').addEventListener('click', function(ev){
   var mk = ev.target.closest('[data-mk]'); if(mk){ MARGIN_SECTOR.kind = mk.getAttribute('data-mk'); renderMarginSector(); return }
-  var me = ev.target.closest('[data-mex]'); if(me){ MARGIN_SECTOR.expanded = me.getAttribute('data-mex') === '1'; renderMarginSector() }
 })
 $('fngEntry').addEventListener('click', function(){
   showPage('pgFng'); fngRender(); fngRefresh(true)
