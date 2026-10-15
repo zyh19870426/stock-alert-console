@@ -716,6 +716,57 @@
   .cs-dbar .cs-mid{background:#d9a72c;}
   .cs-dbar .cs-weak{background:#c95c50;}
   .cs-dlegend{display:flex;justify-content:space-between;margin-top:5px;font-size:12px;color:#5a6068;}
+  /* ===== 大盘阶段雷达（两融视角）★ 2026-10-15 =====
+   * 结构：① 当前阶段卡（mgr-stage + mgr-kv 四指标）
+   *       ② 分位带状小图（mgr-chart / mgr-chart-x）
+   *       ③ 两张表（mgr-tb 5列=画像吻合度；mgr-tb5 5列=命中层条件分布）
+   *       ④ 结论强度如实披露块（mgr-honest，右上角刻意用中性灰底，不做成警示色）
+   * 配色沿用页面主色 #2b6cb0；涨跌沿用 flow-up/flow-dn（A股红涨绿跌）。 */
+  .mgr-stage{background:#f7f8fa;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+  .mgr-stage-t{font-size:13px;color:#5a6068;margin-bottom:8px;}
+  .mgr-stage-t b{font-size:15px;font-weight:500;color:#1a1d21;}
+  .mgr-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;}
+  .mgr-kv span{display:flex;flex-direction:column;gap:1px;}
+  .mgr-kv em{font-size:11px;color:#9aa0a6;font-style:normal;}
+  .mgr-kv b{font-size:15px;font-weight:500;color:#1a1d21;font-variant-numeric:tabular-nums;}
+  .mgr-kv i{font-size:11px;color:#7a8089;font-style:normal;}
+  /* 分位走势小图 */
+  .mgr-chart{margin:4px 0 10px;}
+  .mgr-chart-x{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:#9aa0a6;margin-top:2px;}
+  .mgr-lg{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 3px 0 6px;vertical-align:middle;}
+  .mgr-lg:first-child{margin-left:0;}
+  /* 分块与标题 */
+  .mgr-blk{margin-bottom:10px;}
+  .mgr-blk-t{font-size:13px;color:#3a3f45;font-weight:500;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .mgr-tag{font-size:11px;font-weight:400;color:#9aa0a6;background:#f2f3f5;border-radius:5px;padding:1px 7px;}
+  /* 表格（div 模拟 grid，避免 table 在移动端撑宽） */
+  .mgr-tb{display:flex;flex-direction:column;gap:1px;background:#eceef1;border-radius:8px;overflow:hidden;}
+  .mgr-tr{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr .9fr;background:#fff;}
+  .mgr-tb5 .mgr-tr{grid-template-columns:1.7fr repeat(4,1fr);}
+  .mgr-tr>span{padding:7px 8px;font-size:12px;color:#1a1d21;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:flex-end;min-width:0;}
+  .mgr-tr>span:first-child{justify-content:flex-start;color:#5a6068;overflow:hidden;text-overflow:ellipsis;}
+  .mgr-tr.mgr-th{background:#f7f8fa;}
+  .mgr-tr.mgr-th>span{font-size:11px;color:#9aa0a6;font-weight:400;}
+  .mgr-cond{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  /* 命中层单元格：中位收益 + 胜·段 + 可信度徽章 */
+  .mgr-c{display:flex;flex-direction:column;align-items:flex-end;gap:1px;width:100%;}
+  .mgr-c b{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;}
+  .mgr-sub{font-size:10px;color:#9aa0a6;white-space:nowrap;}
+  .mgr-c.mgr-na{color:#c9ccd1;justify-content:center;}
+  /* 可信度徽章：高/中/弱/低 —— 沿用「跟/躲」蓝橙体系，刻意避开红绿（不暗示买卖） */
+  .mgr-g{font-size:10px;font-style:normal;border-radius:4px;padding:0 4px;line-height:14px;white-space:nowrap;}
+  .mgr-g-hi{background:#e6f0fa;color:#2b6cb0;}
+  .mgr-g-mid{background:#fdf3e3;color:#b07d18;}
+  .mgr-g-weak{background:#f2f3f5;color:#7a8089;}
+  .mgr-g-low{background:#f7f8fa;color:#b0b4b9;}
+  /* 画像吻合度小结 */
+  .mgr-concl{font-size:12px;color:#5a6068;background:#f7f8fa;border-radius:8px;padding:7px 10px;margin-top:6px;line-height:1.7;}
+  .mgr-concl b{color:#1a1d21;font-weight:500;}
+  /* 结论强度（如实披露）：中性底 + 左侧蓝条，不做警示色（避免被读成「危险信号」） */
+  .mgr-honest{background:#f7f8fa;border-left:3px solid #2b6cb0;border-radius:0 8px 8px 0;padding:9px 11px;}
+  .mgr-honest-t{font-size:12px;color:#3a3f45;line-height:1.7;margin-bottom:6px;}
+  .mgr-gs{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:#7a8089;}
+  .mgr-gs span{font-variant-numeric:tabular-nums;}
 </style>
 </head>
 <body>
@@ -1208,6 +1259,8 @@
     </div>
     <div id="marginPeriodTabs" style="display:flex;gap:8px;margin:10px 0;"></div>
     <div id="marginDetail"></div>
+    <!-- ★ 2026-10-15 新增：大盘阶段雷达（两融视角，读云端 margin-regime.json） -->
+    <div id="marginRegime"></div>
     <div id="csPanel"></div>
     <div id="marginSector"></div>
   </div>
@@ -3919,6 +3972,257 @@ function demoMarginSectorData(){
   }
   for(i=0;i<sectors.length;i++) sectors[i].sharePct = sectors[i].rzye / total
   return { date: fmtDay(Date.now()-86400000), total: total, sectors: sectors }
+}
+
+/* ===================== 大盘阶段雷达（两融视角）★ 2026-10-15 =====================
+ * 目标：判定【当前两融阶段】，并给出【历史上同态之后一段时间的走势分布 + 可信度】。
+ *
+ * 数据来源：云端存档 margin-regime.json（stock-alert-cloud/margin-regime.js 每日收盘后生成）。
+ *   页面**只呈现，不重算** —— 分位/事件段/置换检验/可信度全部在云端一次算好，保证口径唯一。
+ *
+ * 口径（冻结在云端脚本 SPEC 里，改口径必须同时改云端脚本与 _tests/margin-regime-test.js）：
+ *   L = 融资余额 ÷ 流通市值        （杠杆水位）
+ *   T = 融资买入额 ÷ 融资余额      （两融成交额/两融余额 = 周转率）
+ *   P = 融资买入额 ÷ 两市成交额    （两融成交额/大盘成交额 = 参与度）
+ *   B60 = 融资余额 60 交易日变化率 （余额趋势）
+ *   · 分位 = 250 交易日**滚动**分位（因果）；不用全历史分位做主口径（绝对水平跨年代不可比）。
+ *   · 样本自 2013-01-01（两融标的扩容后）；入场点 = 信号日**次一交易日收盘**（T+1 披露，严格因果）。
+ *   · 统计单元 = **事件段**（连段命中日聚合，间隔 >10 交易日为新段），每段 1 个观测
+ *     —— 否则相邻日重叠前瞻收益会造成伪重复、把显著性抬高数倍。
+ *   · 显著性 = 置换检验 2000 次；多重比较按预注册检验族校正（主要假设 0.05/8、探索性 0.05/48）。
+ *
+ * ★ 表述口径（2026-10-15 用户明确授权）：本块**允许**条件概率式表述 ——
+ *   「历史上同态之后，未来 N 日中位 X%、胜率 Y%（N 段，可信度 Z）」；
+ *   但必须同时给出**段数**与**可信度**，且**不得**出现「要涨/要跌/可买/该躲」等指令性措辞。
+ */
+var MARGIN_REGIME = { ok:false, busy:false, err:'', at:'', d:null, cloudAt:0, cloudRaw:null }
+var MG_H = [20, 60, 120, 250]
+
+/* 云端存档三源降级（同域名 → raw → jsDelivr）；10 分钟缓存；失败抛错交诚实空态 */
+var marginRegimeCloudRaw = async function(force){
+  var now = Date.now()
+  if(!force && MARGIN_REGIME.cloudRaw && MARGIN_REGIME.cloudAt && now - MARGIN_REGIME.cloudAt < 10*60*1000) return MARGIN_REGIME.cloudRaw
+  var urls = [
+    './margin-regime.json?t=' + Date.now(),
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-regime.json',
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-regime.json'
+  ]
+  var j = null
+  for(var u=0;u<urls.length && !j;u++){
+    try{ var r = await fetch(urls[u]); if(r.ok) j = await r.json() }catch(e){}
+  }
+  if(!j || !j.layers || !j.layers.length || !j.latest) throw new Error('云端存档不可用')
+  MARGIN_REGIME.cloudRaw = j; MARGIN_REGIME.cloudAt = now
+  return j
+}
+async function marginRegimeEnsure(){
+  if(MARGIN_REGIME.ok || MARGIN_REGIME.busy) return
+  if(DEMO){
+    MARGIN_REGIME.d = demoMarginRegimeData()
+    MARGIN_REGIME.ok = true; MARGIN_REGIME.at = 'demo'
+    try{ renderMarginRegime() }catch(e){}
+    return
+  }
+  MARGIN_REGIME.busy = true; MARGIN_REGIME.err = ''
+  try{
+    var j = await marginRegimeCloudRaw()
+    MARGIN_REGIME.d = j
+    MARGIN_REGIME.ok = true
+    MARGIN_REGIME.at = j.date || ''
+  }catch(e){
+    MARGIN_REGIME.err = (e && e.message) ? e.message : '加载失败'
+  }finally{
+    MARGIN_REGIME.busy = false
+  }
+  try{ renderMarginRegime() }catch(e){}
+}
+
+/* ---------- 渲染助手 ---------- */
+function mgPct(v, d){ return (v==null || !isFinite(v)) ? '—' : (v*100).toFixed(d==null?1:d) + '%' }
+function mgGradeCls(g){ return g === '高' ? 'mg-g-hi' : g === '中' ? 'mg-g-mid' : g === '弱' ? 'mg-g-weak' : 'mg-g-low' }
+/* 分位 → 位置词（纯描述，不含方向） */
+function mgLevelL(q){
+  if(q == null) return '—'
+  if(q >= 0.85) return '高位'
+  if(q >= 0.67) return '偏高'
+  if(q >= 0.33) return '中性'
+  if(q >= 0.15) return '偏低'
+  return '低位'
+}
+function mgLevelTP(q){
+  if(q == null) return '—'
+  if(q >= 0.95) return '沸腾'
+  if(q >= 0.85) return '偏高'
+  if(q >= 0.67) return '中性偏上'
+  if(q >= 0.33) return '中性'
+  if(q >= 0.15) return '偏低'
+  if(q >= 0.05) return '很低'
+  return '冰点'
+}
+/* 命中层表格单元格：中位收益 / 胜率 / 段数 / 可信度 */
+function mgCell(h){
+  if(!h) return '<div class="mgr-c mgr-na">—</div>'
+  var win = h.win == null ? '—' : (h.win*100).toFixed(0) + '%'
+  return '<div class="mgr-c"><b class="' + (h.med >= 0 ? 'flow-up' : 'flow-dn') + '">' + mgPct(h.med, 2) + '</b>' +
+    '<span class="mgr-sub">胜 ' + win + ' · ' + h.n + ' 段</span>' +
+    '<em class="mgr-g ' + mgGradeCls(h.grade) + '">' + esc(h.grade) + '</em></div>'
+}
+/* T/P 250日分位近 260 日走势（0~100），带 5%/95% 参考线 —— 只描述位置在带内的哪一端 */
+function mgBandSvg(series){
+  if(!series || series.length < 30) return ''
+  function path(idx){
+    var pts = [], i, n = series.length
+    for(i=0;i<n;i++){
+      var q = series[i][idx]
+      if(q == null || !isFinite(q)) continue
+      var x = i/(n-1)*300, y = 54 - Math.max(0, Math.min(100, q))/100*50
+      pts.push(x.toFixed(1)+','+y.toFixed(1))
+    }
+    return pts.length > 1 ? 'M' + pts.join(' L') : ''
+  }
+  var dT = path(5), dP = path(6)
+  var first = series[0][0], lastD = series[series.length-1][0]
+  return '<div class="mgr-chart">' +
+    '<svg viewBox="0 0 320 62" preserveAspectRatio="none" style="width:100%;height:62px;display:block;">' +
+      '<line x1="0" y1="51.5" x2="320" y2="51.5" stroke="#e6e8eb" stroke-width="1" stroke-dasharray="3 3"/>' +
+      '<line x1="0" y1="6.5" x2="320" y2="6.5" stroke="#e6e8eb" stroke-width="1" stroke-dasharray="3 3"/>' +
+      '<line x1="0" y1="29" x2="320" y2="29" stroke="#f0f1f3" stroke-width="1"/>' +
+      (dP ? '<path d="' + dP + '" fill="none" stroke="#2b6cb0" stroke-width="1.6"/>' : '') +
+      (dT ? '<path d="' + dT + '" fill="none" stroke="#d97706" stroke-width="1.6"/>' : '') +
+    '</svg>' +
+    '<div class="mgr-chart-x"><span>' + esc(first) + '</span>' +
+      '<span><i class="mgr-lg" style="background:#2b6cb0;"></i>参与度分位 <i class="mgr-lg" style="background:#d97706;"></i>周转率分位（虚线=5%/95%）</span>' +
+      '<span>' + esc(lastD) + '</span></div></div>'
+}
+function marginRegimeHtml(){
+  var R = MARGIN_REGIME
+  var head = '<div class="md-sec" style="margin-top:16px;">' +
+    '<div class="dash-h" style="font-size:14px;">大盘阶段雷达 · 两融视角</div>'
+  if(!R.ok){
+    return head + '<div class="near-meta">' +
+      (R.err ? ('阶段雷达数据暂不可用（' + esc(R.err) + '）——本页其余部分不受影响') : '正在读取两融阶段存档…') +
+      '</div></div>'
+  }
+  var d = R.d, L = d.latest, m = d.match || {}, prof = d.profile || {}
+  var lab = [mgLevelL(L.Lq) + '杠杆水位', mgLevelTP(L.Tq) + '周转率', mgLevelTP(L.Pq) + '参与度'].join(' · ')
+  var b60txt = L.B60 == null ? '—' : (L.B60 > 0 ? '+' : '') + L.B60.toFixed(1) + '%'
+  var h = head
+  h += '<div class="near-meta" style="margin:2px 0 8px;color:#9aa0a6;">数据日 ' + esc(L.d) +
+    '（T+1 披露）· 分位=近 250 交易日滚动分位 · 统计单元=事件段 · 不构成买卖建议</div>'
+
+  /* ① 当前阶段 */
+  h += '<div class="mgr-stage"><div class="mgr-stage-t">当前阶段：<b>' + esc(lab) + '</b></div>'
+  h += '<div class="mgr-kv">' +
+    '<span><em>杠杆水位 L</em><b>' + mgPct(L.L, 2) + '</b><i>分位 ' + mgPct(L.Lq, 0) + ' · ' + esc(mgLevelL(L.Lq)) + '</i></span>' +
+    '<span><em>周转率 T</em><b>' + mgPct(L.T, 2) + '</b><i>分位 ' + mgPct(L.Tq, 0) + ' · ' + esc(mgLevelTP(L.Tq)) + '</i></span>' +
+    '<span><em>参与度 P</em><b>' + mgPct(L.P, 2) + '</b><i>分位 ' + mgPct(L.Pq, 0) + ' · ' + esc(mgLevelTP(L.Pq)) + '</i></span>' +
+    '<span><em>余额 60 日</em><b class="' + (L.B60 >= 0 ? 'flow-dn' : 'flow-dn') + '">' + b60txt + '</b><i>' + (L.B60 < -8 ? '急速去杠杆' : L.B60 < -3 ? '温和去杠杆' : L.B60 > 8 ? '快速加杠杆' : '基本持平') + '</i></span>' +
+    '</div></div>'
+  h += mgBandSvg(d.series)
+
+  /* ② 与历史顶/底画像吻合度 */
+  if(m.detail && m.detail.length){
+    h += '<div class="mgr-blk"><div class="mgr-blk-t">与历史顶部 / 底部画像的吻合度' +
+      '<span class="mgr-tag">描述性（事后标注，' + esc(String((prof.bottom && prof.bottom.n) || 0)) + ' 底 / ' + esc(String((prof.top && prof.top.n) || 0)) + ' 顶）</span></div>'
+    h += '<div class="mgr-tb"><div class="mgr-tr mgr-th"><span>维度</span><span>当前</span><span>底部均值</span><span>顶部均值</span><span>更接近</span></div>'
+    for(var i=0;i<m.detail.length;i++){
+      var x = m.detail[i]
+      var fmtv = function(v, k){
+        if(v == null) return '—'
+        if(k === '余额60日') return (v > 0 ? '+' : '') + v.toFixed(1) + '%'
+        return (v*100).toFixed(0) + '%'
+      }
+      h += '<div class="mgr-tr"><span>' + esc(x.k) + '</span><span><b>' + fmtv(x.cur, x.k) + '</b></span>' +
+        '<span>' + fmtv(x.b, x.k) + '</span><span>' + fmtv(x.t, x.k) + '</span>' +
+        '<span class="' + (x.closer === '底' ? 'flow-up' : 'flow-dn') + '">' + esc(x.closer) + (x.ext ? '（更极端）' : '') + '</span></div>'
+    }
+    h += '</div>'
+    h += '<div class="mgr-concl">四维中 <b>' + m.nearBottom + '/' + m.total + '</b> 项更接近<b>' + esc(m.closerTo) + '画像</b>' +
+      (m.closerTo === '底部' ? '（注意：底部画像吻合 ≠ 立刻见底，看下表的条件分布）' : '') + '</div>'
+    h += '</div>'
+  }
+
+  /* ③ 历史同态之后的表现（命中层） */
+  var hits = (d.layers || []).filter(function(l){ return l.on })
+  if(hits.length){
+    h += '<div class="mgr-blk"><div class="mgr-blk-t">当前命中状态 · 历史上同态之后的表现' +
+      '<span class="mgr-tag">条件概率（非预测）</span></div>'
+    h += '<div class="mgr-tb mgr-tb5"><div class="mgr-tr mgr-th"><span>条件（当前命中）</span>'
+    for(var q=0;q<MG_H.length;q++) h += '<span>未来 ' + MG_H[q] + ' 日</span>'
+    h += '</div>'
+    for(i=0;i<hits.length;i++){
+      var l2 = hits[i]
+      h += '<div class="mgr-tr"><span class="mgr-cond">' + esc(l2.label) + '</span>'
+      for(q=0;q<MG_H.length;q++) h += '<span>' + mgCell(l2.h[String(MG_H[q])]) + '</span>'
+      h += '</div>'
+    }
+    h += '</div>'
+    h += '<div class="near-meta" style="margin-top:6px;color:#9aa0a6;">每格 = 历史上同态事件段之后该期限的<b>中位收益 / 胜率 / 段数</b>，右下角字母为可信度（高/中/弱/低）。' +
+      '「段数」是真实样本量——同一段行情里的很多天只算一段。</div>'
+  }
+
+  /* ④ 结论强度（如实披露） */
+  var st = d.strength || {}
+  h += '<div class="mgr-blk mgr-honest"><div class="mgr-blk-t">结论强度（如实披露）</div>'
+  h += '<div class="mgr-honest-t">' + esc(st.text || '—') + '</div>'
+  var gs = d.gradeSummary || {}
+  h += '<div class="mgr-gs">'
+  for(q=0;q<MG_H.length;q++){
+    var g = gs[String(MG_H[q])] || {}
+    h += '<span>' + MG_H[q] + ' 日：高 ' + (g.high||0) + ' / 中 ' + (g.mid||0) + ' / 弱 ' + (g.weak||0) + ' / 低 ' + (g.low||0) + '</span>'
+  }
+  h += '</div>'
+  h += '<div class="near-meta" style="margin-top:6px;color:#9aa0a6;">' +
+    '方法：L/T/P 取 250 交易日滚动分位；B60 为余额 60 日变化率；前瞻收益自<b>次一交易日收盘</b>起算（两融盘后披露，严格因果）；' +
+    '统计单元为事件段（间隔 >10 交易日为新段），显著性用置换检验 2000 次，多重比较按预注册检验族校正；' +
+    '可信度 = 段数 + 置换 p + 跨期（2013-2019 / 2020 至今）同号。样本 ' +
+    esc(String((d.sample && d.sample.n) || 0)) + ' 个交易日（' + esc(String((d.sample && d.sample.from) || '')) + ' ~ ' + esc(String((d.sample && d.sample.to) || '')) + '）。' +
+    '<b>没有任何一项通过多重比较校正</b>时，请把上表当作「弱参考」而不是「信号」。</div>'
+  h += '</div>'
+  h += '</div>'
+  return h
+}
+function renderMarginRegime(){
+  var box = $('marginRegime'); if(!box) return
+  box.innerHTML = marginRegimeHtml()
+}
+/* 演示数据（?demo=1）：结构完整、数值自洽，用于离线预览与 DOM 测试 */
+function demoMarginRegimeData(){
+  function layer(label, on, meds, wins, ns, grades){
+    var h = {}
+    for(var i=0;i<MG_H.length;i++){
+      h[String(MG_H[i])] = { n:ns[i], med:meds[i], win:wins[i], grade:grades[i], p:0.03+i*0.01, trMed:meds[i]*0.8, teMed:meds[i]*1.1 }
+    }
+    return { id:'demo_'+ns.join('_'), label:label, on:on, h:h }
+  }
+  var series = []
+  for(var i=0;i<260;i++){
+    var q = 50 + 45*Math.sin(i/23)
+    series.push([fmtDay(Date.now()-(260-i)*86400000), 2.5, 4.2, 8.1, 70, Math.round(Math.max(1, q)), Math.round(Math.max(1, 100-q)), -3.1])
+  }
+  return {
+    date: fmtDay(Date.now()-86400000),
+    sample: { n: 3343, from: '2013-01-04', to: fmtDay(Date.now()-86400000) },
+    latest: { d: fmtDay(Date.now()-86400000), hs: 4217.68, L:0.0267, T:0.045, P:0.0797, Lq:0.76, Tq:0.01, Pq:0.02, B60:-12.94 },
+    match: { nearBottom:4, nearTop:0, total:4, closerTo:'底部', detail:[
+      { k:'L分位', cur:0.76, b:0.687, t:0.444, closer:'底', ext:'更极端' },
+      { k:'T分位', cur:0.01, b:0.218, t:0.738, closer:'底', ext:'更极端' },
+      { k:'P分位', cur:0.02, b:0.163, t:0.688, closer:'底', ext:'更极端' },
+      { k:'余额60日', cur:-12.94, b:-4.15, t:14.11, closer:'底', ext:'更极端' }
+    ] },
+    profile: { bottom:{ n:11 }, top:{ n:11 } },
+    gradeSummary: { '20':{high:0,mid:3,weak:0,low:9}, '60':{high:0,mid:1,weak:0,low:11}, '120':{high:0,mid:1,weak:1,low:10}, '250':{high:0,mid:0,weak:3,low:9} },
+    strength: { text:'无任何层通过多重比较校正（全部为弱证据）；预注册主要假设（情绪两端对比，20/60 日）无显著项' },
+    layers: [
+      layer('参与度冰点（P 250日分位 ≤5%）', true, [0.011,0.0233,0.0303,0.0487], [0.57,0.61,0.54,0.60], [37,36,35,35], ['中','低','低','低']),
+      layer('周转率冰点（T 250日分位 ≤5%）', true, [0.0017,0.0213,-0.0042,0.0803], [0.52,0.59,0.48,0.66], [31,29,29,29], ['低','低','低','低']),
+      layer('双冰点（P≤5% 且 T≤5%）', true, [0.0134,0.0276,-0.0134,0.0532], [0.57,0.62,0.46,0.58], [28,26,26,26], ['低','低','低','低']),
+      layer('急速去杠杆（余额60日 ≤-8%）', true, [-0.0057,0.0192,-0.0475,0.1115], [0.38,0.71,0.43,0.57], [8,7,7,7], ['低','低','低','低']),
+      layer('顶部特征（P≥85% 且 T≥67% 且 余额60日>0）', false, [-0.0045,-0.022,-0.0127,0.0849], [0.48,0.37,0.48,0.68], [27,27,27,25], ['低','中','低','低'])
+    ],
+    series: series,
+    note: 'demo'
+  }
 }
 
 /* ===================== 大盘「承接性」状态引擎 =====================

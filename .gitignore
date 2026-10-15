@@ -18,6 +18,11 @@
 !股票监控系统-需求与方案说明.md
 !仓库迁移-操作清单.md
 
+# ⚠️ stock-board-sim/ 刻意不纳入根仓（根仓是公开仓库）
+# 策略源码 + 模拟净值 + 数据集 + 实战手册 一律只进私有仓：
+#   github.com/zyh19870426/stock-board-sim
+# 备份/恢复见 stock-board-sim/README-恢复手册.md
+
 # —— 项目记忆随 clone 走（8.1 / 8.4）——
 !/.workbuddy/
 !/.workbuddy/memory/
