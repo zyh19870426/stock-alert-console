@@ -3998,18 +3998,28 @@ function demoMarginSectorData(){
 var MARGIN_REGIME = { ok:false, busy:false, err:'', at:'', d:null, cloudAt:0, cloudRaw:null }
 var MG_H = [20, 60, 120, 250]
 
-/* 云端存档三源降级（同域名 → raw → jsDelivr）；10 分钟缓存；失败抛错交诚实空态 */
+/* 云端存档两源降级（jsDelivr → raw）；10 分钟缓存；失败抛错交诚实空态。
+ *
+ * ★ 2026-10-16 顺序修正（原为「同域 → raw → jsDelivr」，两份源实测都不该排在前面）：
+ *   ① 同域 './margin-regime.json' **不在发布目录里**（发布目录只装 console.html 等静态件，
+ *      该存档在引擎仓 stock-alert）⇒ 恒 404，保留只会让每次首屏先撞一次无谓请求；
+ *   ② raw.githubusercontent.com 在国内是"黑洞"（连接既不成功也不拒绝）⇒ 排在 jsDelivr 之前，
+ *      会让国内首屏白白等它超时，最后才回退。
+ *   ⇒ 现与恐贪存档的备源口径一致：**jsDelivr 在前、raw 垫底**；并复用页面既有的带超时抓取
+ *      fngFetch（8s），避免黑洞把整块卡死（原来是无超时的裸 fetch）。
+ *
+ *   新鲜度：margin.yml 的 regime job 提交后已调 purge.jsdelivr.net 清该文件缓存（已实测生效，
+ *   生效有数分钟延迟）⇒ 期间 jsDelivr 可能仍返回上一日存档。页面头部始终显示「数据日」，以它为准。 */
 var marginRegimeCloudRaw = async function(force){
   var now = Date.now()
   if(!force && MARGIN_REGIME.cloudRaw && MARGIN_REGIME.cloudAt && now - MARGIN_REGIME.cloudAt < 10*60*1000) return MARGIN_REGIME.cloudRaw
   var urls = [
-    './margin-regime.json?t=' + Date.now(),
-    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-regime.json',
-    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-regime.json'
+    'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-regime.json?t=' + Date.now(),
+    'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-regime.json?t=' + Date.now()
   ]
   var j = null
   for(var u=0;u<urls.length && !j;u++){
-    try{ var r = await fetch(urls[u]); if(r.ok) j = await r.json() }catch(e){}
+    try{ var r = await fngFetch(urls[u], {}, 8000); if(r.ok) j = await r.json() }catch(e){}
   }
   if(!j || !j.layers || !j.layers.length || !j.latest) throw new Error('云端存档不可用')
   MARGIN_REGIME.cloudRaw = j; MARGIN_REGIME.cloudAt = now
@@ -5511,6 +5521,11 @@ function renderMarginPeriod(p){
 function marginOpen(){ closeSheet(); showPage('pgMargin'); marginLoad(false) }
 function marginLoad(force){
   if(force){ MARGIN.ok=false; MARGIN.busy=false; MARGIN.err='' }
+  /* ★ 2026-10-18 接线修复：雷达区块 #marginRegime 的 ensure **此前从未被调用** ⇒ 区块永远空白
+     （样式、取数、渲染、回归全都齐了，只差这一行接线；上一轮编写时正好在这一步被打断）。
+     刻意放在 MARGIN 的早退之前：雷达只吃云端存档，不依赖本地两融序列，
+     主档取不到（或还在读）时雷达也该照常出结论。 */
+  try{ marginRegimeEnsure() }catch(e){}
   var stamp = $('marginStamp'), ov = $('marginOverview'), box = $('marginDetail'), tabs = $('marginPeriodTabs')
   if(!MARGIN.ok && !MARGIN.err && !MARGIN.busy) marginEnsure()
   if(!MARGIN.ok){

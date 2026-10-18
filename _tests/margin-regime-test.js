@@ -285,13 +285,26 @@ ok('样本不足时提示「当作弱参考」', /当作「弱参考」/.test(mg
 ok('声明「没有任何一项通过多重比较校正」的处理方式', /没有任何一项通过多重比较校正/.test(mgSegRaw))
 ok('注释里明确写出「不得出现指令性措辞」的约束（元声明保留）', /\*\*不得\*\*出现[\s\S]{0,40}指令性措辞/.test(mgSegRaw), (mgSegRaw.match(/不得[^\n]{0,60}/) || [''])[0].trim())
 
-/* ---- 云端存档降级链（三源）---- */
-group('C6 · 首个源降级链与缓存')
-ok('三源降级：同域 → raw → jsDelivr', /'\.\/margin-regime\.json\?t='[\s\S]{0,200}raw\.githubusercontent\.com[\s\S]{0,200}cdn\.jsdelivr\.net/.test(consoleNoC))
-ok('10 分钟内存缓存', /10\*60\*1000/.test(consoleNoC))
-ok('取不到时诚实空态（不伪造数据）', /云端存档不可用/.test(consoleNoC))
-ok('云端 raw 指向 zyh19870426/stock-alert（新账号）', /raw\.githubusercontent\.com\/zyh19870426\/stock-alert\/main\/margin-regime\.json/.test(consoleNoC))
+/* ---- 云端存档降级链（两源 + 每源超时）----
+ * ★ 2026-10-16 口径变更（实测驱动）：原「同域 → raw → jsDelivr」三源 → 「jsDelivr → raw」两源。
+ *   ① 同域 './margin-regime.json' **不在发布目录里**（发布目录只装 console.html 等静态件，
+ *      该存档在引擎仓 stock-alert）⇒ 恒 404，保留只会让每次首屏先撞一次无谓请求；
+ *   ② raw.githubusercontent.com 在国内是黑洞（连接既不成功也不拒绝）⇒ 排在 jsDelivr 之前
+ *      会让国内首屏白等它超时 ⇒ 与恐贪模块的备源口径统一为「jsDelivr 在前、raw 垫底」；
+ *   ③ 裸 fetch 改带超时的 fngFetch（8s），防黑洞把整块卡死。
+ *   ⚠️ 断言必须落在**雷达片段 mgSeg** 上：恐贪模块（fngLoadRaw）的源顺序与雷达同款，
+ *      若锚在整页 consoleNoC 上会匹配到 fng 那处 ⇒ **假通过**。 */
+group('C6 · 云端存档降级链与缓存')
+ok('两源降级：jsDelivr 排在 raw 之前（顺序即优先级）', /cdn\.jsdelivr\.net[\s\S]{0,160}raw\.githubusercontent\.com/.test(mgSeg))
+ok('顺序自证：jsDelivr 的下标 < raw 的下标（不依赖正则，独立证据）', (function(){ var a = mgSeg.indexOf('cdn.jsdelivr.net'), b = mgSeg.indexOf('raw.githubusercontent.com'); return a >= 0 && b >= 0 && a < b })())
+ok('降级链恰好 2 个源（不再挂恒 404 的同域源）', (mgSeg.match(/https:\/\/cdn\.jsdelivr\.net|https:\/\/raw\.githubusercontent\.com/g) || []).length === 2, String((mgSeg.match(/https:\/\/cdn\.jsdelivr\.net|https:\/\/raw\.githubusercontent\.com/g) || []).length))
+ok('不再引用同域 ./margin-regime.json（发布目录里无此文件，恒 404）', !/\.\/margin-regime\.json/.test(mgSeg))
+ok('每源走带超时的 fngFetch（8s），不再是裸 fetch（防 raw 黑洞卡死首屏）', /await fngFetch\(urls\[u\], \{\}, 8000\)/.test(mgSeg))
+ok('10 分钟内存缓存', /10\*60\*1000/.test(mgSeg))
+ok('取不到时诚实空态（不伪造数据）', /云端存档不可用/.test(mgSeg))
+ok('云端 raw 指向 zyh19870426/stock-alert（新账号）', /raw\.githubusercontent\.com\/zyh19870426\/stock-alert\/main\/margin-regime\.json/.test(mgSeg))
 ok('不含旧账号 zyhaaad 的 raw 地址', !/zyhaaad/.test(mgSeg))
+ok('页面头部仍显示「数据日」（purge 有延迟时的唯一诚实口径）', /数据日 ' \+ esc\(L\.d\)/.test(mgSeg))
 
 /* ---- 必须有挂载点 ---- */
 group('C7 · DOM 挂载与渲染接线')
@@ -302,6 +315,23 @@ ok('marginRegimeHtml 定义存在', /function marginRegimeHtml\(\)/.test(console
 ok('demo 数据函数存在（离线预览用）', /function demoMarginRegimeData\(\)/.test(consoleSrc))
 ok('renderMarginRegime 被调用（渲染接线）', /renderMarginRegime\(\)/.test(consoleNoC.split('function renderMarginRegime')[1] || '') || (consoleNoC.match(/renderMarginRegime\(\)/g) || []).length >= 2, String((consoleNoC.match(/renderMarginRegime\(\)/g) || []).length))
 ok('demo 模式走 demoMarginRegimeData', /demoMarginRegimeData\(\)/.test(consoleNoC))
+/* ★ 2026-10-18 补锁：链路的**另一端**必须也接上。
+   此前只断言「renderMarginRegime 被 ensure 调用」，但 ensure 自己**从来没被任何地方调用**
+   ⇒ 整个雷达区块在线上永远是空白，210 项全绿也照样没内容（典型的只测了内环、漏了外环）。
+   这里改为从 marginLoad 函数段内部断言，且要求它出现在 MARGIN 早退（return）之前 ——
+   否则主档取不到时雷达会被一起跳过。 */
+group('C7c · 外环接线：marginLoad 必须拉起雷达（防「定义了但没人调」）')
+const mlSrcRaw = (() => {
+  const i = consoleNoC.indexOf('function marginLoad(force)')
+  if (i < 0) return ''
+  const j = consoleNoC.indexOf('\n/* demo 两融序列', i)
+  return consoleNoC.slice(i, j > i ? j : i + 2500)
+})()
+ok('取到 marginLoad 函数段', mlSrcRaw.length > 300, 'len=' + mlSrcRaw.length)
+ok('marginLoad 段内调用 marginRegimeEnsure()', /marginRegimeEnsure\(\)/.test(mlSrcRaw))
+const iMre = mlSrcRaw.indexOf('marginRegimeEnsure()')
+const iRet = mlSrcRaw.indexOf('return')
+ok('ensure 位于第一个 return 之前（主档缺失/加载中也不跳过雷达）', iMre >= 0 && (iRet < 0 || iMre < iRet), 'iMre=' + iMre + ' iRet=' + iRet)
 /* 样式类：★ 2026-10-15 实测发现 22 个 mgr-* 类**一条样式都没有**（半成品），已补写。
  * 这里断言「代码里用到的每个 mgr-* 类，样式表里都有定义」——防再次出现「有 DOM 无样式」。 */
 group('C7b · 样式完整性（防「有 DOM 无 CSS」）')
@@ -387,6 +417,20 @@ ok('锁2：若把 winq 改成 120 → A 组断言失败', !/winq:\s*120/.test(MR
 ok('锁3：若 MG_H 与 SPEC.horizons 不一致 → C3 断言失败', JSON.stringify(mgH.split(',').map(s => Number(s.trim()))) === JSON.stringify(S.horizons))
 ok('锁4：若 workflow 去掉 margin-regime.js → D 组断言失败', /node margin-regime\.js/.test(wfSrc))
 ok('锁5：若存档删掉 strength 字段 → C 组断言失败', 'strength' in arc)
+/* ★ 锁6 是「顺序口径」的反向锁：真的把两源对调，C6 第一条断言必须不再成立。
+ *   写它是因为顺序类断言最容易退化成「只要两个域名都出现就算过」（假通过）。 */
+ok('锁6：把两源对调（raw 在前）→ C6 顺序断言确实会失败', (function(){
+  var lines = mgSegRaw.split('\n')
+  var li = -1, lj = -1
+  for (var k = 0; k < lines.length; k++) {
+    if (lines[k].indexOf("'https://cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-regime.json?t='") >= 0) li = k
+    if (lines[k].indexOf("'https://raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-regime.json?t='") >= 0) lj = k
+  }
+  if (li < 0 || lj < 0) return false
+  var t = lines[li]; lines[li] = lines[lj]; lines[lj] = t
+  var swapped = strip(lines.join('\n'))
+  return !/cdn\.jsdelivr\.net[\s\S]{0,160}raw\.githubusercontent\.com/.test(swapped)
+})())
 
 /* ============================================================ */
 console.log('\n' + (fail === 0 ? '✅ ALL GREEN' : '❌ 有失败项') + '  ' + pass + '/' + (pass + fail) + ' 项通过')
