@@ -1561,6 +1561,34 @@ const onNoCmt = on.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, 
   })();
   F15.forEach(x => chk(x.n, x.ok, x.ex));
 
+  /* ===== [F19] 2026-10-18：两融「大盘阶段雷达」外环接线（线上验收） =====
+   * 背景（血案）：雷达的取数 / 渲染 / 样式 / demo / 源码回归全都齐备，但 marginRegimeEnsure()
+   * **从未被任何地方调用** ⇒ 区块在线上永远空白，而 210 项回归照样全绿（只测了内环）。
+   * 故这里补外环：容器 + 渲染函数 + **调用点** + 源顺序，四条都落到线上产物上验。 */
+  LF && console.log(LF + '---- [F19] 两融阶段雷达（外环接线） ----');
+  const F19 = (() => {
+    const out = [];
+    const add = (n, ok, ex) => out.push({ n, ok, ex });
+    /* 段尾锚点必须用**代码**（'/* demo 两融序列' 是注释，脱注释副本里不存在 ⇒ 会切不到边界、
+       退化成「扫全文件」，那这条锁就形同虚设）。 */
+    const ml = between(onNoCmt, 'function marginLoad(force)', 'function demoMarginData()');
+    add('★ [F19] pgMargin 已含雷达容器 id="marginRegime"', /id="marginRegime"/.test(on));
+    add('★ [F19] 雷达渲染函数 marginRegimeHtml 在线上', /function marginRegimeHtml\(\)/.test(onNoCmt));
+    add('★ [F19] marginLoad 段内调用 marginRegimeEnsure()（外环接线，防「定义了没人调」）',
+      ml.length > 200 && /marginRegimeEnsure\(\)/.test(ml), 'segLen=' + ml.length);
+    add('★ [F19] jsDelivr 排在 raw 之前（国内 raw 是黑洞）',
+      (function(){
+        const i1 = onNoCmt.indexOf('cdn.jsdelivr.net/gh/zyh19870426/stock-alert@main/margin-regime.json');
+        const i2 = onNoCmt.indexOf('raw.githubusercontent.com/zyh19870426/stock-alert/main/margin-regime.json');
+        return i1 >= 0 && i2 > i1;
+      })());
+    add('★ [F19] 雷达区块声明「不构成买卖建议」', /不构成买卖建议/.test(onNoCmt));
+    const bad = out.filter(x => !x.ok);
+    if (LF && bad.length) bad.forEach(x => console.log('   ❌ ' + x.n + (x.ex ? ' → ' + x.ex : '')));
+    return out;
+  })();
+  F19.forEach(x => chk(x.n, x.ok, x.ex));
+
   /* ===== [F16] 2026-10-11：大盘「承接性」状态引擎（线上验收） =====
    * 当日状态（强/一般/弱）+ 变化趋势（状态条 + 迷你走势）+ 周期分布 + 连续同状态天数。
    * ★ 口径硬约束：只描述事实与位置，**不写方向措辞**，必须标注「不构成方向判断」。 */
